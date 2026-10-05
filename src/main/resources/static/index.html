@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Airline Reservation</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#f3f6fb;color:#1b2a41}
+header{background:#12355b;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+main{max-width:900px;margin:20px auto;padding:0 16px}
+.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:18px;box-shadow:0 1px 4px #0002}
+input,select,button{padding:9px 12px;margin:4px 4px 4px 0;border:1px solid #bbc;border-radius:6px;font-size:14px}
+button{background:#1f6feb;color:#fff;border:0;cursor:pointer}
+button.danger{background:#d64545}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px;border-bottom:1px solid #e3e8f0;font-size:14px}
+#seats button{width:58px;background:#e8f0fe;color:#12355b;border:1px solid #9bb8ee}
+#seats button.business{background:#fff1d6;border-color:#e6b55c}
+#seats button.chosen{background:#1f6feb;color:#fff}
+#message{position:fixed;top:12px;right:12px;padding:10px 16px;border-radius:6px;color:#fff;display:none}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <strong>Airline Reservation</strong>
+  <span><span id="who"></span> <button id="logout" class="hidden" onclick="logout()">Logout</button></span>
+</header>
+<div id="message"></div>
+<main>
+  <section id="authSection" class="card">
+    <h2>Login or Register</h2>
+    <input id="fullName" placeholder="Full name (register only)">
+    <input id="phone" placeholder="Phone (register only)"><br>
+    <input id="email" type="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password (min 8 characters)"><br>
+    <button onclick="login()">Login</button>
+    <button onclick="registerAccount()">Register</button>
+  </section>
+  <div id="appSection" class="hidden">
+    <section class="card">
+      <h2>Search flights</h2>
+      <select id="origin"></select>
+      <select id="destination"></select>
+      <input id="travelDate" type="date" value="2026-10-10">
+      <button onclick="searchFlights()">Search</button>
+      <table><tbody id="results"></tbody></table>
+    </section>
+    <section id="seatCard" class="card hidden">
+      <h2 id="seatTitle">Choose your seat</h2>
+      <p>Yellow seats are Business class. Hover a seat to see its price.</p>
+      <div id="seats"></div>
+      <p id="selection"></p>
+      <button onclick="confirmBooking()">Confirm booking</button>
+    </section>
+    <section class="card">
+      <h2>My bookings</h2>
+      <table><tbody id="bookings"></tbody></table>
+    </section>
+  </div>
+</main>
+<script>
+    const byId = id => document.getElementById(id);
+const showTime = text => String(text).replace('T', ' ');
+function notify(text, isError) {
+  const box = byId('message');
+  box.textContent = text;
+  box.style.background = isError ? '#d64545' : '#2e9e5b';
+  box.style.display = 'block';
+  setTimeout(() => box.style.display = 'none', 3500);
+}
+async function api(path, method = 'GET', body) {
+  const response = await fetch('/api' + path, {
+    method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Something went wrong');
+  return data;
+}
+async function run(action) {
+  try { await action(); } catch (error) { notify(error.message, true); }
+}
+function showUser(user) {
+  const loggedIn = !!user;
+  byId('authSection').classList.toggle('hidden', loggedIn);
+  byId('appSection').classList.toggle('hidden', !loggedIn);
+  byId('logout').classList.toggle('hidden', !loggedIn);
+  byId('who').textContent = loggedIn ? (user.FullName || user.Email) : '';
+  if (loggedIn) { loadAirports(); loadBookings(); }
+}
+const login = () => run(async () => {
+  showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
+});
+const registerAccount = () => run(async () => {
+  await api('/register', 'POST', {fullName: byId('fullName').value, phone: byId('phone').value,
+    email: byId('email').value, password: byId('password').value});
+  notify('Account created. Logging you in...');
+  await login();
+});
+const logout = () => run(async () => { await api('/logout', 'POST'); showUser(null); });
+let selectedFlightId = null;
+let selectedSeat = null;
+const loadAirports = () => run(async () => {
+  const airports = await api('/airports');
+  const options = airports.map(a => `<option value="${a.AirportCode}">${a.City} (${a.AirportCode})</option>`).join('');
+  byId('origin').innerHTML = options;
+  byId('destination').innerHTML = options;
+  byId('destination').selectedIndex = 1;
+});
+const searchFlights = () => run(async () => {
+  const query = `origin=${byId('origin').value}&destination=${byId('destination').value}&date=${byId('travelDate').value}`;
+  const flights = await api('/flights?' + query);
+  byId('results').innerHTML = flights.length === 0 ? '<tr><td>No flights found for this route and date.</td></tr>'
+    : '<tr><th>Flight</th><th>Departs</th><th>Arrives</th><th>From PKR</th><th>Free seats</th><th></th></tr>' +
+      flights.map(f => `<tr><td>${f.FlightNumber}</td><td>${showTime(f.DepartureTime)}</td><td>${showTime(f.ArrivalTime)}</td>
+        <td>${f.BasePrice}</td><td>${f.AvailableSeats}</td>
+        <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
+});
+const chooseSeat = (flightId, flightNumber) => run(async () => {
+  selectedFlightId = flightId;
+  selectedSeat = null;
+  byId('selection').textContent = '';
+  byId('seatTitle').textContent = 'Choose your seat on ' + flightNumber;
+  const seats = await api(`/flights/${flightId}/seats`);
+  byId('seats').innerHTML = seats.map(s =>
+    `<button class="${s.SeatClass === 'Business' ? 'business' : ''}" title="PKR ${s.Price}"
+      onclick="selectSeat(this, '${s.SeatNumber}', ${s.Price})">${s.SeatNumber}</button>`).join('');
+  byId('seatCard').classList.remove('hidden');
+  byId('seatCard').scrollIntoView({behavior: 'smooth'});
+});
+function selectSeat(button, seatNumber, price) {
+  document.querySelectorAll('#seats button').forEach(b => b.classList.remove('chosen'));
+  button.classList.add('chosen');
+  selectedSeat = seatNumber;
+  byId('selection').textContent = `Seat ${seatNumber} - PKR ${price}`;
+}
+const confirmBooking = () => run(async () => {
+  if (!selectedSeat) throw new Error('Please click a seat first.');
+  const ticket = await api('/bookings', 'POST', {flightId: String(selectedFlightId), seatNumber: selectedSeat});
+  notify(`Booked! Seat ${ticket.SeatNumber}, PKR ${ticket.Price}`);
+  byId('seatCard').classList.add('hidden');
+  loadBookings();
+  searchFlights();
+});
+const loadBookings = () => run(async () => {
+  const bookings = await api('/bookings/mine');
+  byId('bookings').innerHTML = bookings.length === 0 ? '<tr><td>No bookings yet.</td></tr>'
+    : '<tr><th>#</th><th>Flight</th><th>Route</th><th>Departs</th><th>Seat</th><th>Price</th><th>Status</th><th>Refund</th><th></th></tr>' +
+      bookings.map(b => `<tr><td>${b.BookingID}</td><td>${b.FlightNumber}</td><td>${b.OriginCode} to ${b.DestinationCode}</td>
+        <td>${showTime(b.DepartureTime)}</td><td>${b.SeatNumber}</td><td>${b.Price}</td><td>${b.BookingStatus}</td>
+        <td>${b.RefundAmount ?? ''}</td>
+        <td>${b.BookingStatus === 'Confirmed' ? `<button class="danger" onclick="cancelBooking(${b.BookingID})">Cancel</button>` : ''}</td></tr>`).join('');
+});
+const cancelBooking = bookingId => run(async () => {
+  if (!confirm('Cancel this booking?')) return;
+  const result = await api(`/bookings/${bookingId}/cancel`, 'POST');
+  notify(`Booking cancelled. Refund: PKR ${result.RefundAmount}`);
+  loadBookings();
+});
+api('/me').then(showUser).catch(() => showUser(null));
+</script>
+</body>
+</html>

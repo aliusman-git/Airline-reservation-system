@@ -1,0 +1,4 @@
+server.port=8080
+spring.datasource.url=jdbc:sqlserver://localhost\\SQLEXPRESS01;databaseName=AirlineWEBDB;encrypt=false;trustServerCertificate=true;
+spring.datasource.username=airline_app
+spring.datasource.password=YOUR_PASSWORD_HERE

@@ -659,6 +659,23 @@ EXEC usp_RegisterUser
     @Phone    = '0300-0000000',
     @Password = N'Demo@12345';
 GO
+CREATE OR ALTER PROCEDURE usp_GetUpcomingFlights
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT f.FlightID, f.FlightNumber, f.OriginCode, f.DestinationCode,
+           f.DepartureTime, f.ArrivalTime, f.BasePrice,
+           f.Capacity - taken.SeatsTaken AS AvailableSeats
+    FROM Flights f
+    CROSS APPLY (
+        SELECT COUNT(*) AS SeatsTaken
+        FROM Tickets t
+        WHERE t.FlightID = f.FlightID AND t.Status = 'Active'
+    ) taken
+    WHERE f.Status = 'Scheduled' AND f.DepartureTime > SYSDATETIME()
+    ORDER BY f.DepartureTime;
+END;
+GO
 
   /* ---------------------------------------------------------------------
    --PART 4 - Test examples (remove the comment markers to try them)

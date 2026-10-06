@@ -4,38 +4,83 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Airline Reservation</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E✈️%3C/text%3E%3C/svg%3E">
 <style>
-body{font-family:system-ui,sans-serif;margin:0;background:#f3f6fb;color:#1b2a41}
-header{background:#12355b;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+:root{--primary:#0e7490;--primary-dark:#164e63;--accent:#f59e0b;--background:#ecfeff;--text:#0f172a;--danger:#dc2626}
+[data-theme="sunset"]{--primary:#c2410c;--primary-dark:#7c2d12;--accent:#eab308;--background:#fff7ed}
+[data-theme="royal"]{--primary:#6d28d9;--primary-dark:#4c1d95;--accent:#f472b6;--background:#f5f3ff}
+[data-theme="forest"]{--primary:#15803d;--primary-dark:#14532d;--accent:#f59e0b;--background:#f0fdf4}
+body{font-family:system-ui,sans-serif;margin:0;background:var(--background);color:var(--text)}
+header{background:linear-gradient(90deg,var(--primary-dark),var(--primary));color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 8px #0003}
+header #logout{background:#ffffff26;border:1px solid #fff6}
 main{max-width:900px;margin:20px auto;padding:0 16px}
-.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:18px;box-shadow:0 1px 4px #0002}
-input,select,button{padding:9px 12px;margin:4px 4px 4px 0;border:1px solid #bbc;border-radius:6px;font-size:14px}
-button{background:#1f6feb;color:#fff;border:0;cursor:pointer}
-button.danger{background:#d64545}
+.card{background:#fff;border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 2px 8px color-mix(in srgb,var(--primary) 20%,transparent);border-top:4px solid var(--accent)}
+h2{color:var(--primary-dark)}
+input,select,button{padding:9px 12px;margin:4px 4px 4px 0;border:1px solid color-mix(in srgb,var(--primary) 35%,white);border-radius:6px;font-size:14px}
+input:focus,select:focus{outline:2px solid var(--primary);border-color:var(--primary)}
+button{background:var(--primary);color:#fff;border:0;cursor:pointer;transition:background .2s}
+button:hover{background:var(--primary-dark)}
+button.danger{background:var(--danger)}
 table{width:100%;border-collapse:collapse}
-th,td{text-align:left;padding:8px;border-bottom:1px solid #e3e8f0;font-size:14px}
-#seats button{width:58px;background:#e8f0fe;color:#12355b;border:1px solid #9bb8ee}
-#seats button.business{background:#fff1d6;border-color:#e6b55c}
-#seats button.chosen{background:#1f6feb;color:#fff}
-#message{position:fixed;top:12px;right:12px;padding:10px 16px;border-radius:6px;color:#fff;display:none}
+th{background:color-mix(in srgb,var(--primary) 15%,white);color:var(--primary-dark)}
+th,td{text-align:left;padding:8px;border-bottom:1px solid color-mix(in srgb,var(--primary) 15%,white);font-size:14px}
+tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
+#seats button{width:58px;background:color-mix(in srgb,var(--primary) 12%,white);color:var(--primary-dark);border:1px solid color-mix(in srgb,var(--primary) 45%,white)}
+#seats button.business{background:#fef3c7;border-color:var(--accent)}
+#seats button.chosen{background:var(--primary);color:#fff;border-color:var(--primary)}
+#message{position:fixed;top:12px;right:12px;padding:10px 16px;border-radius:6px;color:#fff;display:none;box-shadow:0 2px 8px #0004}
 .hidden{display:none}
+.palette{display:flex;align-items:center}
+.swatch{width:22px;height:22px;padding:0;margin:0 3px;border-radius:50%;border:2px solid #fff;cursor:pointer}
+.auth{max-width:380px;margin:40px auto;text-align:center;animation:slideUp .6s ease-out}
+.auth input,.auth button{width:100%;box-sizing:border-box;margin:6px 0;padding:11px 12px}
+.auth input:focus{box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 20%,transparent)}
+.auth button{font-weight:600;transition:all .2s}
+.auth button:hover{transform:translateY(-2px);box-shadow:0 4px 10px color-mix(in srgb,var(--primary) 35%,transparent)}
+.plane{font-size:44px;display:inline-block;animation:fly 3s ease-in-out infinite}
+.tabs{display:flex;margin:8px 0 14px;border-bottom:2px solid color-mix(in srgb,var(--primary) 15%,white)}
+.auth .tab{flex:1;background:none;color:#64748b;border-radius:6px 6px 0 0;margin:0}
+.auth .tab:hover{transform:none;box-shadow:none;background:color-mix(in srgb,var(--primary) 6%,white);color:var(--primary-dark)}
+.auth .tab.active{color:var(--primary-dark);box-shadow:inset 0 -3px 0 var(--primary)}
+.password-row{display:flex;align-items:center;gap:6px}
+.password-row input{width:auto;flex:1;min-width:0}
+.auth .password-row .ghost{width:auto;flex:none;background:color-mix(in srgb,var(--primary) 12%,white);color:var(--primary-dark);padding:8px 12px}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+@keyframes fly{0%,100%{transform:translate(-8px,2px) rotate(-6deg)}50%{transform:translate(8px,-6px) rotate(4deg)}}
+@media (prefers-reduced-motion:reduce){.plane,.auth{animation:none}}
 </style>
 </head>
 <body>
 <header>
   <strong>Airline Reservation</strong>
+  <span class="palette">
+    <button class="swatch" style="background:#0e7490" title="Teal" onclick="setTheme('teal')"></button>
+    <button class="swatch" style="background:#c2410c" title="Sunset" onclick="setTheme('sunset')"></button>
+    <button class="swatch" style="background:#6d28d9" title="Royal" onclick="setTheme('royal')"></button>
+    <button class="swatch" style="background:#15803d" title="Forest" onclick="setTheme('forest')"></button>
+  </span>
   <span><span id="who"></span> <button id="logout" class="hidden" onclick="logout()">Logout</button></span>
 </header>
 <div id="message"></div>
 <main>
-  <section id="authSection" class="card">
-    <h2>Login or Register</h2>
-    <input id="fullName" placeholder="Full name (register only)">
-    <input id="phone" placeholder="Phone (register only)"><br>
+  <section id="authSection" class="card auth">
+    <div class="plane">&#9992;</div>
+    <div class="tabs">
+      <button id="loginTab" class="tab active" onclick="showTab('login')">Login</button>
+      <button id="registerTab" class="tab" onclick="showTab('register')">Create account</button>
+    </div>
+    <div id="registerFields" class="hidden">
+      <input id="fullName" placeholder="Full name">
+      <input id="phone" placeholder="Phone">
+    </div>
     <input id="email" type="email" placeholder="Email">
-    <input id="password" type="password" placeholder="Password (min 8 characters)"><br>
-    <button onclick="login()">Login</button>
-    <button onclick="registerAccount()">Register</button>
+    <div class="password-row">
+      <input id="password" type="password" placeholder="Password (min 8 characters)">
+      <button type="button" id="showPassword" class="ghost" onclick="togglePassword()">Show</button>
+    </div>
+    <input id="confirmPassword" type="password" placeholder="Confirm password" class="hidden">
+    <button id="loginButton" onclick="login()">Login</button>
+    <button id="registerButton" class="hidden" onclick="registerAccount()">Create account</button>
   </section>
   <div id="appSection" class="hidden">
     <section class="card">
@@ -60,7 +105,9 @@ th,td{text-align:left;padding:8px;border-bottom:1px solid #e3e8f0;font-size:14px
   </div>
 </main>
 <script>
-    const byId = id => document.getElementById(id);
+let selectedFlightId = null;
+let selectedSeat = null;
+const byId = id => document.getElementById(id);
 const showTime = text => String(text).replace('T', ' ');
 function notify(text, isError) {
   const box = byId('message');
@@ -85,20 +132,19 @@ function showUser(user) {
   byId('appSection').classList.toggle('hidden', !loggedIn);
   byId('logout').classList.toggle('hidden', !loggedIn);
   byId('who').textContent = loggedIn ? (user.FullName || user.Email) : '';
-  if (loggedIn) { loadAirports(); loadBookings(); }
+  if (loggedIn) { loadAirports(); loadBookings(); } else { byId('password').value = ''; showTab('login'); }
 }
 const login = () => run(async () => {
   showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
 });
 const registerAccount = () => run(async () => {
+  if (byId('password').value !== byId('confirmPassword').value) throw new Error('Passwords do not match.');
   await api('/register', 'POST', {fullName: byId('fullName').value, phone: byId('phone').value,
     email: byId('email').value, password: byId('password').value});
   notify('Account created. Logging you in...');
   await login();
 });
 const logout = () => run(async () => { await api('/logout', 'POST'); showUser(null); });
-let selectedFlightId = null;
-let selectedSeat = null;
 const loadAirports = () => run(async () => {
   const airports = await api('/airports');
   const options = airports.map(a => `<option value="${a.AirportCode}">${a.City} (${a.AirportCode})</option>`).join('');
@@ -156,6 +202,29 @@ const cancelBooking = bookingId => run(async () => {
   notify(`Booking cancelled. Refund: PKR ${result.RefundAmount}`);
   loadBookings();
 });
+function showTab(tabName) {
+  byId('confirmPassword').classList.toggle('hidden', tabName !== 'register');
+  const registering = tabName === 'register';
+  byId('registerFields').classList.toggle('hidden', !registering);
+  byId('loginButton').classList.toggle('hidden', registering);
+  byId('registerButton').classList.toggle('hidden', !registering);
+  byId('loginTab').classList.toggle('active', !registering);
+  byId('registerTab').classList.toggle('active', registering);
+}
+function togglePassword() {
+  const showing = byId('password').type === 'text';
+  const newType = showing ? 'password' : 'text';
+  byId('password').type = newType;
+  byId('confirmPassword').type = newType;
+  byId('showPassword').textContent = showing ? 'Show' : 'Hide';
+}
+function setTheme(themeName) {
+  document.documentElement.dataset.theme = themeName;
+  try { localStorage.setItem('theme', themeName); } catch (error) {}
+}
+let savedTheme = 'teal';
+try { savedTheme = localStorage.getItem('theme') || 'teal'; } catch (error) {}
+setTheme(savedTheme);
 api('/me').then(showUser).catch(() => showUser(null));
 </script>
 </body>

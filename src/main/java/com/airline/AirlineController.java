@@ -60,6 +60,10 @@ public class AirlineController {
     public List<Map<String, Object>> availableSeats(@PathVariable int flightId) {
         return jdbc.queryForList("EXEC usp_GetAvailableSeats ?", flightId);
     }
+        @GetMapping("/flights/upcoming")
+    public List<Map<String, Object>> upcomingFlights() {
+        return readable(jdbc.queryForList("EXEC usp_GetUpcomingFlights"));
+    }
     private List<Map<String, Object>> readable(List<Map<String, Object>> rows) {
         rows.forEach(row -> row.replaceAll((column, value) ->
             value instanceof Timestamp timestamp ? timestamp.toLocalDateTime().toString() : value));

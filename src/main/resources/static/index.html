@@ -91,6 +91,10 @@ tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
       <button onclick="searchFlights()">Search</button>
       <table><tbody id="results"></tbody></table>
     </section>
+        <section class="card">
+      <h2>Upcoming flights</h2>
+      <table><tbody id="upcoming"></tbody></table>
+    </section>
     <section id="seatCard" class="card hidden">
       <h2 id="seatTitle">Choose your seat</h2>
       <p>Yellow seats are Business class. Hover a seat to see its price.</p>
@@ -189,6 +193,7 @@ const confirmBooking = () => run(async () => {
 });
 const loadBookings = () => run(async () => {
   const bookings = await api('/bookings/mine');
+    loadUpcoming();
   byId('bookings').innerHTML = bookings.length === 0 ? '<tr><td>No bookings yet.</td></tr>'
     : '<tr><th>#</th><th>Flight</th><th>Route</th><th>Departs</th><th>Seat</th><th>Price</th><th>Status</th><th>Refund</th><th></th></tr>' +
       bookings.map(b => `<tr><td>${b.BookingID}</td><td>${b.FlightNumber}</td><td>${b.OriginCode} to ${b.DestinationCode}</td>
@@ -225,6 +230,14 @@ function setTheme(themeName) {
 let savedTheme = 'teal';
 try { savedTheme = localStorage.getItem('theme') || 'teal'; } catch (error) {}
 setTheme(savedTheme);
+const loadUpcoming = () => run(async () => {
+  const flights = await api('/flights/upcoming');
+  byId('upcoming').innerHTML = flights.length === 0 ? '<tr><td>No upcoming flights.</td></tr>'
+    : '<tr><th>Flight</th><th>Route</th><th>Departs</th><th>From PKR</th><th>Free seats</th><th></th></tr>' +
+      flights.map(f => `<tr><td>${f.FlightNumber}</td><td>${f.OriginCode} to ${f.DestinationCode}</td><td>${showTime(f.DepartureTime)}</td>
+        <td>${f.BasePrice}</td><td>${f.AvailableSeats}</td>
+        <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
+});
 api('/me').then(showUser).catch(() => showUser(null));
 </script>
 </body>

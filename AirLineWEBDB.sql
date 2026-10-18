@@ -1,37 +1,22 @@
 /* =====================================================================
    AirlineWEBDB - Airline Reservation System (SQL Server / T-SQL)
 
-   WARNING: this script DROPS and RECREATES the whole AirlineWEBDB
-   database, so every run starts from a clean state. Once your project
-   holds real data, delete or comment out PART 0.
+   RUN THIS WHOLE FILE ONCE in SQL Server Management Studio (press F5).
 
-   Parts:
-     0. Reset database
-     1. Tables (with constraints and indexes)
-     2. Stored procedures (users, flights, seats, booking, cancelling)
-     3. Seed data (airports, flights, seats, demo users)
-     4. Test examples (commented out)
+   WARNING: it DROPS and RECREATES the AirlineWEBDB database, so every
+   run starts clean. Remove PART 0 once you keep real data.
+
+   Parts: 0 Reset | 1 Tables | 2 Procedures | 3 Sample data | 4 App login | 5 Tests
    ===================================================================== */
-
-/* ---------------------------------------------------------------------
-   PART 0 - Reset database
-   --------------------------------------------------------------------- */
 CREATE DATABASE AirlineWEBDB;
 GO
-
 USE AirlineWEBDB;
 GO
-
--- Required for filtered indexes to work inside stored procedures
 SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
 
-/* ---------------------------------------------------------------------
-   PART 1 - Tables
-   --------------------------------------------------------------------- */
-
--- 1. Airports
+/* ---------------- PART 1 - Tables ---------------- */
 CREATE TABLE Airports (
     AirportCode CHAR(3)      NOT NULL,
     City        VARCHAR(100) NOT NULL,
@@ -39,8 +24,6 @@ CREATE TABLE Airports (
     CONSTRAINT PK_Airports PRIMARY KEY (AirportCode)
 );
 GO
-
--- 2. Users (login accounts). Passwords are stored as salted hashes, never as plain text.
 CREATE TABLE Users (
     UserID           INT IDENTITY(1,1) NOT NULL,
     Email            VARCHAR(100)      NOT NULL,
@@ -58,8 +41,6 @@ CREATE TABLE Users (
     CONSTRAINT CK_Users_Email CHECK (Email LIKE '%_@_%._%')
 );
 GO
-
--- 3. Passengers (profile of a customer; linked to a login account)
 CREATE TABLE Passengers (
     PassengerID INT IDENTITY(1,1) NOT NULL,
     UserID      INT               NULL,
@@ -72,14 +53,8 @@ CREATE TABLE Passengers (
     CONSTRAINT CK_Passengers_Email CHECK (Email LIKE '%_@_%._%')
 );
 GO
-
--- One login account can own only one passenger profile
-CREATE UNIQUE INDEX UX_Passengers_User
-    ON Passengers (UserID)
-    WHERE UserID IS NOT NULL;
+CREATE UNIQUE INDEX UX_Passengers_User ON Passengers (UserID) WHERE UserID IS NOT NULL;
 GO
-
--- 4. Flights
 CREATE TABLE Flights (
     FlightID        INT IDENTITY(1,1) NOT NULL,
     FlightNumber    VARCHAR(20)       NOT NULL,
@@ -88,7 +63,7 @@ CREATE TABLE Flights (
     DepartureTime   DATETIME2(0)      NOT NULL,
     ArrivalTime     DATETIME2(0)      NOT NULL,
     Capacity        INT               NOT NULL,
-    BasePrice       DECIMAL(10,2)     NOT NULL,   -- economy price; seats multiply it
+    BasePrice       DECIMAL(10,2)     NOT NULL,
     Status          VARCHAR(20)       NOT NULL CONSTRAINT DF_Flights_Status DEFAULT 'Scheduled',
     CONSTRAINT PK_Flights PRIMARY KEY (FlightID),
     CONSTRAINT UQ_Flights_Number UNIQUE (FlightNumber),
@@ -101,14 +76,11 @@ CREATE TABLE Flights (
     CONSTRAINT CK_Flights_Status CHECK (Status IN ('Scheduled', 'Cancelled', 'Departed'))
 );
 GO
-
 CREATE INDEX IX_Flights_Search ON Flights (OriginCode, DestinationCode, DepartureTime);
 GO
-
--- 5. Seats (every flight has its own list of seats)
 CREATE TABLE Seats (
     FlightID        INT          NOT NULL,
-    SeatNumber      VARCHAR(10)  NOT NULL,   -- e.g. 1A, 12C
+    SeatNumber      VARCHAR(10)  NOT NULL,
     SeatClass       VARCHAR(20)  NOT NULL,
     PriceMultiplier DECIMAL(4,2) NOT NULL CONSTRAINT DF_Seats_Multiplier DEFAULT 1.00,
     CONSTRAINT PK_Seats PRIMARY KEY (FlightID, SeatNumber),
@@ -117,8 +89,6 @@ CREATE TABLE Seats (
     CONSTRAINT CK_Seats_Multiplier CHECK (PriceMultiplier > 0)
 );
 GO
-
--- 6. Bookings
 CREATE TABLE Bookings (
     BookingID   INT IDENTITY(1,1) NOT NULL,
     PassengerID INT               NOT NULL,
@@ -133,19 +103,10 @@ CREATE TABLE Bookings (
     CONSTRAINT CK_Bookings_Status CHECK (Status IN ('Confirmed', 'Cancelled'))
 );
 GO
-
--- A passenger cannot hold two ACTIVE bookings on the same flight,
--- but may re-book after cancelling.
-CREATE UNIQUE INDEX UX_Bookings_Passenger_Flight_Active
-    ON Bookings (PassengerID, FlightID)
-    WHERE Status = 'Confirmed';
-GO
-
+CREATE UNIQUE INDEX UX_Bookings_Passenger_Flight_Active ON Bookings (PassengerID, FlightID) WHERE Status = 'Confirmed';
 CREATE INDEX IX_Bookings_Flight    ON Bookings (FlightID, Status);
 CREATE INDEX IX_Bookings_Passenger ON Bookings (PassengerID);
 GO
-
--- 7. Tickets
 CREATE TABLE Tickets (
     TicketID     INT IDENTITY(1,1) NOT NULL,
     BookingID    INT               NOT NULL,
@@ -157,48 +118,51 @@ CREATE TABLE Tickets (
     RefundAmount DECIMAL(10,2)     NULL,
     CONSTRAINT PK_Tickets PRIMARY KEY (TicketID),
     CONSTRAINT UQ_Tickets_Booking UNIQUE (BookingID),
-    -- ticket must belong to a booking on the SAME flight
     CONSTRAINT FK_Tickets_Booking FOREIGN KEY (BookingID, FlightID) REFERENCES Bookings(BookingID, FlightID),
-    -- seat must really exist on that flight
     CONSTRAINT FK_Tickets_Seat FOREIGN KEY (FlightID, SeatNumber) REFERENCES Seats(FlightID, SeatNumber),
     CONSTRAINT CK_Tickets_Price CHECK (Price >= 0),
     CONSTRAINT CK_Tickets_Status CHECK (Status IN ('Active', 'Cancelled'))
 );
 GO
-
--- The same seat cannot have two ACTIVE tickets (stops double seat booking)
-CREATE UNIQUE INDEX UX_Tickets_ActiveSeat
-    ON Tickets (FlightID, SeatNumber)
-    WHERE Status = 'Active';
+CREATE UNIQUE INDEX UX_Tickets_ActiveSeat ON Tickets (FlightID, SeatNumber) WHERE Status = 'Active';
+GO
+-- Simulated payments: one 'Paid' row per booking, plus a 'Refunded' row on a refundable cancellation.
+-- No card numbers are ever stored.
+CREATE TABLE Payments (
+    PaymentID INT IDENTITY(1,1) NOT NULL,
+    BookingID INT               NOT NULL,
+    Amount    DECIMAL(10,2)     NOT NULL,
+    Method    VARCHAR(20)       NOT NULL,
+    Status    VARCHAR(20)       NOT NULL,
+    Reference VARCHAR(30)       NOT NULL,
+    CreatedAt DATETIME2(0)      NOT NULL CONSTRAINT DF_Payments_CreatedAt DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_Payments PRIMARY KEY (PaymentID),
+    CONSTRAINT FK_Payments_Booking FOREIGN KEY (BookingID) REFERENCES Bookings(BookingID),
+    CONSTRAINT CK_Payments_Amount CHECK (Amount >= 0),
+    CONSTRAINT CK_Payments_Method CHECK (Method IN ('Card', 'JazzCash', 'Easypaisa', 'Bank Transfer')),
+    CONSTRAINT CK_Payments_Status CHECK (Status IN ('Paid', 'Refunded'))
+);
+GO
+CREATE INDEX IX_Payments_Booking ON Payments (BookingID);
 GO
 
-/* ---------------------------------------------------------------------
-   PART 2 - Stored procedures
-   --------------------------------------------------------------------- */
+/* ---------------- PART 2 - Stored procedures ---------------- */
 
--- Creates the seat map of a flight: 6 seats per row (A-F), rows 1-3 Business (2x price).
+-- Seat map: 6 seats per row (A-F), rows 1-3 Business at 2x price.
 CREATE OR ALTER PROCEDURE usp_GenerateSeats
     @FlightID INT
 AS
 BEGIN
     SET NOCOUNT ON;
-
     DECLARE @Capacity INT;
-
     SELECT @Capacity = Capacity FROM Flights WHERE FlightID = @FlightID;
-
     IF @Capacity IS NULL
         THROW 50010, 'Flight does not exist.', 1;
-
-    -- Seats already created? Then do nothing.
     IF EXISTS (SELECT 1 FROM Seats WHERE FlightID = @FlightID)
         RETURN;
-
     ;WITH Numbers AS (
-        SELECT TOP (@Capacity)
-               CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS INT) AS SeatIndex
-        FROM sys.all_objects a
-        CROSS JOIN sys.all_objects b
+        SELECT TOP (@Capacity) CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS INT) AS SeatIndex
+        FROM sys.all_objects a CROSS JOIN sys.all_objects b
     )
     INSERT INTO Seats (FlightID, SeatNumber, SeatClass, PriceMultiplier)
     SELECT @FlightID,
@@ -208,35 +172,22 @@ BEGIN
     FROM Numbers;
 END;
 GO
-
--- Admin: add a new flight and create its seats in one safe step.
+-- Admin: add a flight and its seats in one safe step.
 CREATE OR ALTER PROCEDURE usp_AddFlight
-    @FlightNumber    VARCHAR(20),
-    @OriginCode      CHAR(3),
-    @DestinationCode CHAR(3),
-    @DepartureTime   DATETIME2(0),
-    @ArrivalTime     DATETIME2(0),
-    @Capacity        INT,
-    @BasePrice       DECIMAL(10,2)
+    @FlightNumber VARCHAR(20), @OriginCode CHAR(3), @DestinationCode CHAR(3),
+    @DepartureTime DATETIME2(0), @ArrivalTime DATETIME2(0), @Capacity INT, @BasePrice DECIMAL(10,2)
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-
     BEGIN TRY
         BEGIN TRANSACTION;
-
         DECLARE @NewFlightID INT;
-
         INSERT INTO Flights (FlightNumber, OriginCode, DestinationCode, DepartureTime, ArrivalTime, Capacity, BasePrice)
         VALUES (@FlightNumber, @OriginCode, @DestinationCode, @DepartureTime, @ArrivalTime, @Capacity, @BasePrice);
-
         SET @NewFlightID = SCOPE_IDENTITY();
-
         EXEC usp_GenerateSeats @FlightID = @NewFlightID;
-
         COMMIT TRANSACTION;
-
         SELECT @NewFlightID AS FlightID;
     END TRY
     BEGIN CATCH
@@ -245,47 +196,28 @@ BEGIN
     END CATCH;
 END;
 GO
-
 -- Sign up: creates the login account and the passenger profile together.
 CREATE OR ALTER PROCEDURE usp_RegisterUser
-    @FullName VARCHAR(150),
-    @Email    VARCHAR(100),
-    @Phone    VARCHAR(20) = NULL,
-    @Password NVARCHAR(100)
+    @FullName VARCHAR(150), @Email VARCHAR(100), @Phone VARCHAR(20) = NULL, @Password NVARCHAR(100)
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-
     SET @Email = LOWER(LTRIM(RTRIM(@Email)));
-
     IF LEN(@Password) < 8
         THROW 50020, 'Password must be at least 8 characters.', 1;
-
-    IF EXISTS (SELECT 1 FROM Users WHERE Email = @Email)
-       OR EXISTS (SELECT 1 FROM Passengers WHERE Email = @Email)
+    IF EXISTS (SELECT 1 FROM Users WHERE Email = @Email) OR EXISTS (SELECT 1 FROM Passengers WHERE Email = @Email)
         THROW 50021, 'This email is already registered.', 1;
-
     DECLARE @Salt VARBINARY(16) = CRYPT_GEN_RANDOM(16);
     DECLARE @Hash VARBINARY(32) = HASHBYTES('SHA2_256', @Salt + CONVERT(VARBINARY(200), @Password));
-    DECLARE @NewUserID INT;
-    DECLARE @NewPassengerID INT;
-
+    DECLARE @NewUserID INT, @NewPassengerID INT;
     BEGIN TRY
         BEGIN TRANSACTION;
-
-        INSERT INTO Users (Email, PasswordHash, PasswordSalt, Role)
-        VALUES (@Email, @Hash, @Salt, 'Customer');
-
+        INSERT INTO Users (Email, PasswordHash, PasswordSalt, Role) VALUES (@Email, @Hash, @Salt, 'Customer');
         SET @NewUserID = SCOPE_IDENTITY();
-
-        INSERT INTO Passengers (UserID, FullName, Email, Phone)
-        VALUES (@NewUserID, @FullName, @Email, @Phone);
-
+        INSERT INTO Passengers (UserID, FullName, Email, Phone) VALUES (@NewUserID, @FullName, @Email, @Phone);
         SET @NewPassengerID = SCOPE_IDENTITY();
-
         COMMIT TRANSACTION;
-
         SELECT @NewUserID AS UserID, @NewPassengerID AS PassengerID;
     END TRY
     BEGIN CATCH
@@ -294,199 +226,121 @@ BEGIN
     END CATCH;
 END;
 GO
-
--- Login: returns one row on success, raises an error otherwise.
--- Locks the account for 15 minutes after 5 wrong passwords in a row.
+-- Login: locks the account for 15 minutes after 5 wrong passwords in a row.
 CREATE OR ALTER PROCEDURE usp_LoginUser
-    @Email    VARCHAR(100),
-    @Password NVARCHAR(100)
+    @Email VARCHAR(100), @Password NVARCHAR(100)
 AS
 BEGIN
     SET NOCOUNT ON;
-
     SET @Email = LOWER(LTRIM(RTRIM(@Email)));
-
-    DECLARE @UserID INT;
-    DECLARE @StoredHash VARBINARY(32);
-    DECLARE @Salt VARBINARY(16);
-    DECLARE @IsActive BIT;
-    DECLARE @LockedUntil DATETIME2(0);
-
-    SELECT @UserID = UserID,
-           @StoredHash = PasswordHash,
-           @Salt = PasswordSalt,
-           @IsActive = IsActive,
-           @LockedUntil = LockedUntil
-    FROM Users
-    WHERE Email = @Email;
-
-    -- Same message for unknown email and wrong password, so attackers cannot guess which emails exist
+    DECLARE @UserID INT, @StoredHash VARBINARY(32), @Salt VARBINARY(16), @IsActive BIT, @LockedUntil DATETIME2(0);
+    SELECT @UserID = UserID, @StoredHash = PasswordHash, @Salt = PasswordSalt, @IsActive = IsActive, @LockedUntil = LockedUntil
+    FROM Users WHERE Email = @Email;
     IF @UserID IS NULL
         THROW 50030, 'Invalid email or password.', 1;
-
     IF @IsActive = 0
         THROW 50031, 'This account is disabled.', 1;
-
     IF @LockedUntil IS NOT NULL AND @LockedUntil > SYSDATETIME()
         THROW 50032, 'Account temporarily locked. Please try again later.', 1;
-
-    -- Lock time finished: start counting from zero again
     IF @LockedUntil IS NOT NULL AND @LockedUntil <= SYSDATETIME()
         UPDATE Users SET FailedLoginCount = 0, LockedUntil = NULL WHERE UserID = @UserID;
-
     IF HASHBYTES('SHA2_256', @Salt + CONVERT(VARBINARY(200), @Password)) <> @StoredHash
     BEGIN
         UPDATE Users
         SET FailedLoginCount = FailedLoginCount + 1,
-            LockedUntil = CASE WHEN FailedLoginCount + 1 >= 5
-                               THEN DATEADD(MINUTE, 15, SYSDATETIME())
-                               ELSE LockedUntil END
+            LockedUntil = CASE WHEN FailedLoginCount + 1 >= 5 THEN DATEADD(MINUTE, 15, SYSDATETIME()) ELSE LockedUntil END
         WHERE UserID = @UserID;
-
         THROW 50030, 'Invalid email or password.', 1;
     END;
-
-    UPDATE Users
-    SET FailedLoginCount = 0, LockedUntil = NULL, LastLoginAt = SYSDATETIME()
-    WHERE UserID = @UserID;
-
+    UPDATE Users SET FailedLoginCount = 0, LockedUntil = NULL, LastLoginAt = SYSDATETIME() WHERE UserID = @UserID;
     SELECT u.UserID, p.PassengerID, u.Role, p.FullName, u.Email
-    FROM Users u
-    LEFT JOIN Passengers p ON p.UserID = u.UserID
+    FROM Users u LEFT JOIN Passengers p ON p.UserID = u.UserID
     WHERE u.UserID = @UserID;
 END;
 GO
-
--- Search flights by route and date, with the number of free seats.
 CREATE OR ALTER PROCEDURE usp_SearchFlights
-    @Origin      CHAR(3),
-    @Destination CHAR(3),
-    @TravelDate  DATE
+    @Origin CHAR(3), @Destination CHAR(3), @TravelDate DATE
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    SELECT f.FlightID,
-           f.FlightNumber,
-           f.OriginCode,
-           f.DestinationCode,
-           f.DepartureTime,
-           f.ArrivalTime,
-           f.BasePrice,
+    SELECT f.FlightID, f.FlightNumber, f.OriginCode, f.DestinationCode, f.DepartureTime, f.ArrivalTime, f.BasePrice,
            f.Capacity - taken.SeatsTaken AS AvailableSeats
     FROM Flights f
-    CROSS APPLY (
-        SELECT COUNT(*) AS SeatsTaken
-        FROM Tickets t
-        WHERE t.FlightID = f.FlightID AND t.Status = 'Active'
-    ) taken
-    WHERE f.OriginCode = @Origin
-      AND f.DestinationCode = @Destination
-      AND f.DepartureTime >= @TravelDate
-      AND f.DepartureTime <  DATEADD(DAY, 1, @TravelDate)
-      AND f.DepartureTime >  SYSDATETIME()
-      AND f.Status = 'Scheduled'
+    CROSS APPLY (SELECT COUNT(*) AS SeatsTaken FROM Tickets t WHERE t.FlightID = f.FlightID AND t.Status = 'Active') taken
+    WHERE f.OriginCode = @Origin AND f.DestinationCode = @Destination
+      AND f.DepartureTime >= @TravelDate AND f.DepartureTime < DATEADD(DAY, 1, @TravelDate)
+      AND f.DepartureTime > SYSDATETIME() AND f.Status = 'Scheduled'
     ORDER BY f.DepartureTime;
 END;
 GO
-
--- Seat selection: list the free seats of a flight with their prices.
+-- Departures board: every upcoming scheduled flight with its free seats.
+CREATE OR ALTER PROCEDURE usp_GetUpcomingFlights
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT f.FlightID, f.FlightNumber, f.OriginCode, f.DestinationCode, f.DepartureTime, f.ArrivalTime, f.BasePrice,
+           f.Capacity - taken.SeatsTaken AS AvailableSeats
+    FROM Flights f
+    CROSS APPLY (SELECT COUNT(*) AS SeatsTaken FROM Tickets t WHERE t.FlightID = f.FlightID AND t.Status = 'Active') taken
+    WHERE f.Status = 'Scheduled' AND f.DepartureTime > SYSDATETIME()
+    ORDER BY f.DepartureTime;
+END;
+GO
 CREATE OR ALTER PROCEDURE usp_GetAvailableSeats
     @FlightID INT
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    SELECT s.SeatNumber,
-           s.SeatClass,
-           CAST(f.BasePrice * s.PriceMultiplier AS DECIMAL(10,2)) AS Price
+    SELECT s.SeatNumber, s.SeatClass, CAST(f.BasePrice * s.PriceMultiplier AS DECIMAL(10,2)) AS Price
     FROM Seats s
     JOIN Flights f ON f.FlightID = s.FlightID
     WHERE s.FlightID = @FlightID
-      AND NOT EXISTS (
-            SELECT 1
-            FROM Tickets t
-            WHERE t.FlightID = s.FlightID
-              AND t.SeatNumber = s.SeatNumber
-              AND t.Status = 'Active')
-    ORDER BY CAST(LEFT(s.SeatNumber, LEN(s.SeatNumber) - 1) AS INT),
-             RIGHT(s.SeatNumber, 1);
+      AND NOT EXISTS (SELECT 1 FROM Tickets t WHERE t.FlightID = s.FlightID AND t.SeatNumber = s.SeatNumber AND t.Status = 'Active')
+    ORDER BY CAST(LEFT(s.SeatNumber, LEN(s.SeatNumber) - 1) AS INT), RIGHT(s.SeatNumber, 1);
 END;
 GO
-
--- Book a flight with a chosen seat. The price comes from the database, not from the caller.
+-- Book a seat and record the (simulated) payment in the same transaction.
 CREATE OR ALTER PROCEDURE usp_BookFlight
-    @PassengerID INT,
-    @FlightID    INT,
-    @SeatNumber  VARCHAR(10)
+    @PassengerID INT, @FlightID INT, @SeatNumber VARCHAR(10), @PaymentMethod VARCHAR(20) = 'Card'
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-
-    DECLARE @DepartureTime DATETIME2(0);
-    DECLARE @FlightStatus  VARCHAR(20);
-    DECLARE @BasePrice     DECIMAL(10,2);
-    DECLARE @Multiplier    DECIMAL(4,2);
-    DECLARE @Price         DECIMAL(10,2);
-    DECLARE @NewBookingID  INT;
-    DECLARE @NewTicketID   INT;
-
+    DECLARE @DepartureTime DATETIME2(0), @FlightStatus VARCHAR(20), @BasePrice DECIMAL(10,2);
+    DECLARE @Multiplier DECIMAL(4,2), @Price DECIMAL(10,2), @NewBookingID INT, @NewTicketID INT, @Reference VARCHAR(30);
     SET @SeatNumber = UPPER(LTRIM(RTRIM(@SeatNumber)));
-
     BEGIN TRY
         BEGIN TRANSACTION;
-
-        SELECT @DepartureTime = DepartureTime,
-               @FlightStatus  = Status,
-               @BasePrice     = BasePrice
-        FROM Flights
-        WHERE FlightID = @FlightID;
-
+        IF @PaymentMethod NOT IN ('Card', 'JazzCash', 'Easypaisa', 'Bank Transfer')
+            THROW 50046, 'Please choose a valid payment method.', 1;
+        SELECT @DepartureTime = DepartureTime, @FlightStatus = Status, @BasePrice = BasePrice
+        FROM Flights WHERE FlightID = @FlightID;
         IF @FlightStatus IS NULL
             THROW 50040, 'Flight does not exist.', 1;
-
         IF @FlightStatus <> 'Scheduled' OR @DepartureTime <= SYSDATETIME()
             THROW 50041, 'This flight is not open for booking.', 1;
-
         IF NOT EXISTS (SELECT 1 FROM Passengers WHERE PassengerID = @PassengerID)
             THROW 50042, 'Passenger does not exist.', 1;
-
-        -- Lock this seat row: if two people click the same seat at the same moment,
-        -- the second one waits here until the first one finishes.
         SELECT @Multiplier = PriceMultiplier
         FROM Seats WITH (UPDLOCK, HOLDLOCK)
         WHERE FlightID = @FlightID AND SeatNumber = @SeatNumber;
-
         IF @Multiplier IS NULL
             THROW 50043, 'This seat does not exist on the selected flight.', 1;
-
-        IF EXISTS (SELECT 1 FROM Tickets
-                   WHERE FlightID = @FlightID AND SeatNumber = @SeatNumber AND Status = 'Active')
+        IF EXISTS (SELECT 1 FROM Tickets WHERE FlightID = @FlightID AND SeatNumber = @SeatNumber AND Status = 'Active')
             THROW 50044, 'This seat is already taken.', 1;
-
-        IF EXISTS (SELECT 1 FROM Bookings
-                   WHERE PassengerID = @PassengerID AND FlightID = @FlightID AND Status = 'Confirmed')
+        IF EXISTS (SELECT 1 FROM Bookings WHERE PassengerID = @PassengerID AND FlightID = @FlightID AND Status = 'Confirmed')
             THROW 50045, 'You already have a confirmed booking on this flight.', 1;
-
         SET @Price = CAST(@BasePrice * @Multiplier AS DECIMAL(10,2));
-
-        INSERT INTO Bookings (PassengerID, FlightID, Status)
-        VALUES (@PassengerID, @FlightID, 'Confirmed');
-
+        INSERT INTO Bookings (PassengerID, FlightID, Status) VALUES (@PassengerID, @FlightID, 'Confirmed');
         SET @NewBookingID = SCOPE_IDENTITY();
-
-        INSERT INTO Tickets (BookingID, FlightID, SeatNumber, Price)
-        VALUES (@NewBookingID, @FlightID, @SeatNumber, @Price);
-
+        INSERT INTO Tickets (BookingID, FlightID, SeatNumber, Price) VALUES (@NewBookingID, @FlightID, @SeatNumber, @Price);
         SET @NewTicketID = SCOPE_IDENTITY();
-
+        SET @Reference = 'PAY-' + RIGHT(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', ''), 10);
+        INSERT INTO Payments (BookingID, Amount, Method, Status, Reference)
+        VALUES (@NewBookingID, @Price, @PaymentMethod, 'Paid', @Reference);
         COMMIT TRANSACTION;
-
-        SELECT @NewBookingID AS BookingID,
-               @NewTicketID  AS TicketID,
-               @SeatNumber   AS SeatNumber,
-               @Price        AS Price;
+        SELECT @NewBookingID AS BookingID, @NewTicketID AS TicketID, @SeatNumber AS SeatNumber,
+               @Price AS Price, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
@@ -494,68 +348,45 @@ BEGIN
     END CATCH;
 END;
 GO
-
--- Cancel a booking. The seat becomes free again and the refund is calculated:
---   more than 48 hours before departure -> 100% refund
---   24 to 48 hours before departure     -> 50% refund
---   less than 24 hours                  -> no refund
--- (change these rules to match your project requirements)
+-- Cancel: frees the seat and records the refund. Refund rules (change if needed):
+--   more than 48 hours before departure -> 100%,  24 to 48 hours -> 50%,  under 24 hours -> 0
 CREATE OR ALTER PROCEDURE usp_CancelBooking
-    @BookingID   INT,
-    @PassengerID INT
+    @BookingID INT, @PassengerID INT
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-
-    DECLARE @OwnerID       INT;
-    DECLARE @BookingStatus VARCHAR(20);
-    DECLARE @FlightID      INT;
-    DECLARE @DepartureTime DATETIME2(0);
-    DECLARE @Price         DECIMAL(10,2);
-    DECLARE @Refund        DECIMAL(10,2);
-
+    DECLARE @OwnerID INT, @BookingStatus VARCHAR(20), @FlightID INT, @DepartureTime DATETIME2(0);
+    DECLARE @Price DECIMAL(10,2), @Refund DECIMAL(10,2), @RefundMethod VARCHAR(20);
     BEGIN TRY
         BEGIN TRANSACTION;
-
-        SELECT @OwnerID = PassengerID,
-               @BookingStatus = Status,
-               @FlightID = FlightID
-        FROM Bookings WITH (UPDLOCK)
-        WHERE BookingID = @BookingID;
-
-        -- Same message for "not found" and "not yours", so other people's bookings stay private
+        SELECT @OwnerID = PassengerID, @BookingStatus = Status, @FlightID = FlightID
+        FROM Bookings WITH (UPDLOCK) WHERE BookingID = @BookingID;
         IF @OwnerID IS NULL OR @OwnerID <> @PassengerID
             THROW 50050, 'Booking not found.', 1;
-
         IF @BookingStatus = 'Cancelled'
             THROW 50051, 'This booking is already cancelled.', 1;
-
         SELECT @DepartureTime = DepartureTime FROM Flights WHERE FlightID = @FlightID;
-
         IF @DepartureTime <= SYSDATETIME()
             THROW 50052, 'A flight that has already departed cannot be cancelled.', 1;
-
-        SELECT @Price = Price
-        FROM Tickets
-        WHERE BookingID = @BookingID AND Status = 'Active';
-
+        SELECT @Price = Price FROM Tickets WHERE BookingID = @BookingID AND Status = 'Active';
         SET @Refund = CAST(
             CASE WHEN @DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN @Price
                  WHEN @DepartureTime > DATEADD(HOUR, 24, SYSDATETIME()) THEN @Price * 0.50
                  ELSE 0 END AS DECIMAL(10,2));
-
-        UPDATE Bookings
-        SET Status = 'Cancelled', CancelledAt = SYSDATETIME()
-        WHERE BookingID = @BookingID;
-
-        UPDATE Tickets
-        SET Status = 'Cancelled', RefundAmount = @Refund
-        WHERE BookingID = @BookingID AND Status = 'Active';
-
+        UPDATE Bookings SET Status = 'Cancelled', CancelledAt = SYSDATETIME() WHERE BookingID = @BookingID;
+        UPDATE Tickets SET Status = 'Cancelled', RefundAmount = @Refund WHERE BookingID = @BookingID AND Status = 'Active';
+        IF @Refund > 0
+        BEGIN
+            SELECT TOP 1 @RefundMethod = Method FROM Payments
+            WHERE BookingID = @BookingID AND Status = 'Paid' ORDER BY PaymentID;
+            IF @RefundMethod IS NOT NULL
+                INSERT INTO Payments (BookingID, Amount, Method, Status, Reference)
+                VALUES (@BookingID, @Refund, @RefundMethod, 'Refunded',
+                        'REF-' + RIGHT(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', ''), 10));
+        END;
         COMMIT TRANSACTION;
-
-        SELECT @BookingID AS BookingID, 'Cancelled' AS Status, @Refund AS RefundAmount;
+        SELECT @BookingID AS BookingID, 'Cancelled' AS Status, @Refund AS RefundAmount, @RefundMethod AS RefundMethod;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
@@ -563,143 +394,105 @@ BEGIN
     END CATCH;
 END;
 GO
-
--- "My bookings" page.
 CREATE OR ALTER PROCEDURE usp_GetPassengerBookings
     @PassengerID INT
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    SELECT b.BookingID,
-           b.Status AS BookingStatus,
-           b.BookingDate,
-           f.FlightNumber,
-           f.OriginCode,
-           f.DestinationCode,
-           f.DepartureTime,
-           f.ArrivalTime,
-           t.SeatNumber,
-           t.Price,
-           t.RefundAmount
+    SELECT b.BookingID, b.Status AS BookingStatus, b.BookingDate, f.FlightNumber, f.OriginCode, f.DestinationCode,
+           f.DepartureTime, f.ArrivalTime, t.SeatNumber, t.Price, t.RefundAmount,
+           pay.Method AS PaymentMethod, pay.Reference AS PaymentReference,
+           CASE WHEN b.Status = 'Confirmed' THEN CAST(
+               CASE WHEN f.DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN t.Price
+                    WHEN f.DepartureTime > DATEADD(HOUR, 24, SYSDATETIME()) THEN t.Price * 0.50
+                    ELSE 0 END AS DECIMAL(10,2)) END AS ExpectedRefund
     FROM Bookings b
     JOIN Flights f ON f.FlightID = b.FlightID
     JOIN Tickets t ON t.BookingID = b.BookingID
+    OUTER APPLY (SELECT TOP 1 Method, Reference FROM Payments
+                 WHERE BookingID = b.BookingID AND Status = 'Paid' ORDER BY PaymentID) pay
     WHERE b.PassengerID = @PassengerID
     ORDER BY f.DepartureTime DESC;
 END;
 GO
 
-/* ---------------------------------------------------------------------
-   PART 3 - Seed data
-   --------------------------------------------------------------------- */
-
-MERGE INTO Airports AS target
-USING (VALUES
-    ('KHI', 'Karachi',   'Pakistan'),
-    ('LHE', 'Lahore',    'Pakistan'),
-    ('ISB', 'Islamabad', 'Pakistan'),
-    ('MUX', 'Multan',    'Pakistan'),
-    ('PEW', 'Peshawar',  'Pakistan'),
-    ('SKT', 'Sialkot',   'Pakistan')
-) AS source (AirportCode, City, Country)
-ON target.AirportCode = source.AirportCode
-WHEN NOT MATCHED THEN
-    INSERT (AirportCode, City, Country)
-    VALUES (source.AirportCode, source.City, source.Country);
+/* ---------------- PART 3 - Sample data ---------------- */
+INSERT INTO Airports (AirportCode, City, Country) VALUES
+    ('KHI', 'Karachi', 'Pakistan'), ('LHE', 'Lahore', 'Pakistan'), ('ISB', 'Islamabad', 'Pakistan'),
+    ('MUX', 'Multan', 'Pakistan'), ('PEW', 'Peshawar', 'Pakistan'), ('SKT', 'Sialkot', 'Pakistan');
 GO
-
--- Flight times and prices (PKR) are sample values for testing
-MERGE INTO Flights AS target
-USING (VALUES
-    ('PK-300', 'KHI', 'ISB', '2026-10-10 08:00:00', '2026-10-10 10:00:00', 150, 22000.00),
-    ('PK-302', 'KHI', 'LHE', '2026-10-11 14:00:00', '2026-10-11 15:45:00', 180, 20000.00),
-    ('PK-301', 'ISB', 'KHI', '2026-10-12 18:00:00', '2026-10-12 20:00:00', 150, 22000.00),
-    ('PK-211', 'MUX', 'KHI', '2026-10-20 06:00:00', '2026-10-20 07:15:00', 120, 15000.00),
-    ('PK-741', 'PEW', 'ISB', '2026-10-21 14:00:00', '2026-10-21 14:50:00', 250,  9000.00),
-    ('PK-739', 'SKT', 'MUX', '2026-10-22 20:00:00', '2026-10-22 21:20:00', 230, 12000.00),
-    ('PK-799', 'SKT', 'PEW', '2026-10-22 10:00:00', '2026-10-22 11:05:00', 230, 14000.00),
-    ('PK-901', 'ISB', 'SKT', '2026-10-12 15:00:00', '2026-10-12 15:55:00', 150, 11000.00)
-) AS source (FlightNumber, OriginCode, DestinationCode, DepartureTime, ArrivalTime, Capacity, BasePrice)
-ON target.FlightNumber = source.FlightNumber
-WHEN NOT MATCHED THEN
-    INSERT (FlightNumber, OriginCode, DestinationCode, DepartureTime, ArrivalTime, Capacity, BasePrice)
-    VALUES (source.FlightNumber, source.OriginCode, source.DestinationCode,
-            source.DepartureTime, source.ArrivalTime, source.Capacity, source.BasePrice);
+-- Flight dates are calculated from the day you run this script (DayOffset = days from today,
+-- DepartMinutes = minutes after midnight), so the sample flights are always in the near future.
+-- WeekShift moves every flight 7 days later, so all flights fall in the week after next week.
+-- Change the 7 below to 0 for next week, or 14 for the week after that.
+DECLARE @Today DATETIME2(0) = CAST(CAST(SYSDATETIME() AS DATE) AS DATETIME2(0));
+INSERT INTO Flights (FlightNumber, OriginCode, DestinationCode, DepartureTime, ArrivalTime, Capacity, BasePrice)
+SELECT CONCAT(v.FlightNumber, w.Suffix), v.OriginCode, v.DestinationCode,
+       DATEADD(MINUTE, v.DepartMinutes, DATEADD(DAY, v.DayOffset + w.WeekShift, @Today)),
+       DATEADD(MINUTE, v.DepartMinutes + v.DurationMinutes, DATEADD(DAY, v.DayOffset + w.WeekShift, @Today)),
+       v.Capacity, v.BasePrice
+FROM (VALUES
+    ('PK-300', 'KHI', 'ISB', 1,  480, 120, 150, 22000.00),
+    ('PK-302', 'KHI', 'LHE', 2,  840, 105, 180, 20000.00),
+    ('PK-301', 'ISB', 'KHI', 3, 1080, 120, 150, 22000.00),
+    ('PK-901', 'ISB', 'SKT', 3,  900,  55, 150, 11000.00),
+    ('PK-211', 'MUX', 'KHI', 4,  360,  75, 120, 15000.00),
+    ('PK-741', 'PEW', 'ISB', 5,  840,  50, 250,  9000.00),
+    ('PK-799', 'SKT', 'PEW', 6,  600,  65, 230, 14000.00),
+    ('PK-739', 'SKT', 'MUX', 6, 1200,  80, 230, 12000.00)
+) AS v (FlightNumber, OriginCode, DestinationCode, DayOffset, DepartMinutes, DurationMinutes, Capacity, BasePrice)
+CROSS JOIN (VALUES (7, '')) AS w (WeekShift, Suffix);
 GO
-
--- Create the seat map for every flight
 DECLARE @CurrentFlightID INT = (SELECT MIN(FlightID) FROM Flights);
-
 WHILE @CurrentFlightID IS NOT NULL
 BEGIN
     EXEC usp_GenerateSeats @FlightID = @CurrentFlightID;
-
-    SELECT @CurrentFlightID = MIN(FlightID)
-    FROM Flights
-    WHERE FlightID > @CurrentFlightID;
+    SELECT @CurrentFlightID = MIN(FlightID) FROM Flights WHERE FlightID > @CurrentFlightID;
 END;
 GO
-
--- Demo admin account (CHANGE THIS PASSWORD before using the project for real)
+-- Demo admin account (CHANGE THIS PASSWORD before real use)
 DECLARE @AdminSalt VARBINARY(16) = CRYPT_GEN_RANDOM(16);
 DECLARE @AdminPassword NVARCHAR(100) = N'Admin@12345';
-
 INSERT INTO Users (Email, PasswordHash, PasswordSalt, Role)
-VALUES ('admin@airline.com',
-        HASHBYTES('SHA2_256', @AdminSalt + CONVERT(VARBINARY(200), @AdminPassword)),
-        @AdminSalt,
-        'Admin');
+VALUES ('admin@airline.com', HASHBYTES('SHA2_256', @AdminSalt + CONVERT(VARBINARY(200), @AdminPassword)), @AdminSalt, 'Admin');
 GO
-
 -- Demo customer account for testing
-EXEC usp_RegisterUser
-    @FullName = 'Demo Passenger',
-    @Email    = 'demo@example.com',
-    @Phone    = '0300-0000000',
-    @Password = N'Demo@12345';
+EXEC usp_RegisterUser @FullName = 'Demo Passenger', @Email = 'demo@example.com', @Phone = '0300-0000000', @Password = N'Demo@12345';
 GO
-CREATE OR ALTER PROCEDURE usp_GetUpcomingFlights
-AS
+
+/* ---------------- PART 4 - Application login ----------------
+   The Java app connects with a SQL login. The password is NOT stored in this file.
+   A) FIRST TIME ONLY: remove the comment markers, choose your own password, run it once
+      (SQL Server must allow "SQL Server and Windows Authentication mode"):
+
+   USE master;
+   CREATE LOGIN airline_app WITH PASSWORD = 'CHOOSE_YOUR_PASSWORD', CHECK_POLICY = OFF;
+   GO
+   USE AirlineWEBDB;
+   GO
+
+   B) Every run: if the login already exists, give it access to this fresh database. */
+IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'airline_app')
 BEGIN
-    SET NOCOUNT ON;
-    SELECT f.FlightID, f.FlightNumber, f.OriginCode, f.DestinationCode,
-           f.DepartureTime, f.ArrivalTime, f.BasePrice,
-           f.Capacity - taken.SeatsTaken AS AvailableSeats
-    FROM Flights f
-    CROSS APPLY (
-        SELECT COUNT(*) AS SeatsTaken
-        FROM Tickets t
-        WHERE t.FlightID = f.FlightID AND t.Status = 'Active'
-    ) taken
-    WHERE f.Status = 'Scheduled' AND f.DepartureTime > SYSDATETIME()
-    ORDER BY f.DepartureTime;
-END;
+    CREATE USER airline_app FOR LOGIN airline_app;
+    GRANT EXECUTE TO airline_app;
+    GRANT SELECT ON Airports TO airline_app;
+END
 GO
 
-  /* ---------------------------------------------------------------------
-   --PART 4 - Test examples (remove the comment markers to try them)
-   ---------------------------------------------------------------------
+/* ---------------- PART 5 - Test examples (select a line and press F5) ----------------
 
--- Log in
 EXEC usp_LoginUser @Email = 'demo@example.com', @Password = N'Demo@12345';
-
--- Search flights from Karachi to Islamabad on 10 Oct 2026
-EXEC usp_SearchFlights @Origin = 'KHI', @Destination = 'ISB', @TravelDate = '2026-10-10';
-
--- See free seats on flight 1
+EXEC usp_GetUpcomingFlights;
 EXEC usp_GetAvailableSeats @FlightID = 1;
-
--- Book seat 5C on flight 1 for passenger 1
-EXEC usp_BookFlight @PassengerID = 1, @FlightID = 1, @SeatNumber = '5C';
-
--- Try the same seat again -> error "This seat is already taken."
-EXEC usp_BookFlight @PassengerID = 1, @FlightID = 1, @SeatNumber = '5C';
-
--- My bookings
+EXEC usp_BookFlight @PassengerID = 1, @FlightID = 1, @SeatNumber = '5C', @PaymentMethod = 'Easypaisa';
 EXEC usp_GetPassengerBookings @PassengerID = 1;
-
--- Cancel booking 1 (then seat 5C is free again)
 EXEC usp_CancelBooking @BookingID = 1, @PassengerID = 1;
-
+SELECT * FROM Payments;
+   USE AirlineWEBDB;
+SELECT COUNT(*) AS Tables FROM sys.tables;
+SELECT COUNT(*) AS Procedures FROM sys.procedures;
+SELECT COUNT(*) AS Flights FROM Flights;
+SELECT COUNT(*) AS Seats FROM Seats;
+SELECT FlightNumber, DepartureTime FROM Flights ORDER BY DepartureTime;
    --------------------------------------------------------------------- */

@@ -23,7 +23,7 @@ public class AirlineController {
         return jdbc.queryForMap("EXEC usp_RegisterUser ?, ?, ?, ?",
             body.get("fullName"), body.get("email"), body.getOrDefault("phone", ""), body.get("password"));
     }
-        @PostMapping("/login")
+    @PostMapping("/login")
     public Map<String, Object> login(@RequestBody Map<String, String> body, HttpSession session) {
         Map<String, Object> loggedInUser = new HashMap<>(
             jdbc.queryForMap("EXEC usp_LoginUser ?, ?", body.get("email"), body.get("password")));
@@ -47,7 +47,7 @@ public class AirlineController {
         }
         return user;
     }
-        @GetMapping("/airports")
+    @GetMapping("/airports")
     public List<Map<String, Object>> airports() {
         return jdbc.queryForList("SELECT AirportCode, City FROM Airports ORDER BY City");
     }
@@ -60,7 +60,7 @@ public class AirlineController {
     public List<Map<String, Object>> availableSeats(@PathVariable int flightId) {
         return jdbc.queryForList("EXEC usp_GetAvailableSeats ?", flightId);
     }
-        @GetMapping("/flights/upcoming")
+    @GetMapping("/flights/upcoming")
     public List<Map<String, Object>> upcomingFlights() {
         return readable(jdbc.queryForList("EXEC usp_GetUpcomingFlights"));
     }
@@ -69,10 +69,11 @@ public class AirlineController {
             value instanceof Timestamp timestamp ? timestamp.toLocalDateTime().toString() : value));
         return rows;
     }
-        @PostMapping("/bookings")
+    @PostMapping("/bookings")
     public Map<String, Object> book(@RequestBody Map<String, String> body, HttpSession session) {
-        return jdbc.queryForMap("EXEC usp_BookFlight ?, ?, ?",
-            requirePassengerId(session), Integer.parseInt(body.get("flightId")), body.get("seatNumber"));
+        return jdbc.queryForMap("EXEC usp_BookFlight ?, ?, ?, ?",
+            requirePassengerId(session), Integer.parseInt(body.get("flightId")), body.get("seatNumber"),
+            body.getOrDefault("paymentMethod", "Card"));
     }
     @GetMapping("/bookings/mine")
     public List<Map<String, Object>> myBookings(HttpSession session) {
@@ -89,7 +90,7 @@ public class AirlineController {
         }
         return passengerId;
     }
-        @ExceptionHandler(DataAccessException.class)
+    @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<Map<String, String>> handleDatabaseError(DataAccessException exception) {
         return ResponseEntity.badRequest()
             .body(Map.of("error", String.valueOf(NestedExceptionUtils.getMostSpecificCause(exception).getMessage())));

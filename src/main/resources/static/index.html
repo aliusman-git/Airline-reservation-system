@@ -87,11 +87,11 @@ tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
       <h2>Search flights</h2>
       <select id="origin"></select>
       <select id="destination"></select>
-      <input id="travelDate" type="date" value="2026-10-10">
+      <input id="travelDate" type="date">
       <button onclick="searchFlights()">Search</button>
       <table><tbody id="results"></tbody></table>
     </section>
-        <section class="card">
+    <section class="card">
       <h2>Upcoming flights</h2>
       <table><tbody id="upcoming"></tbody></table>
     </section>
@@ -100,7 +100,9 @@ tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
       <p>Yellow seats are Business class. Hover a seat to see its price.</p>
       <div id="seats"></div>
       <p id="selection"></p>
-      <button onclick="confirmBooking()">Confirm booking</button>
+      <label>Pay with: <select id="paymentMethod"><option>Card</option><option>JazzCash</option><option>Easypaisa</option><option>Bank Transfer</option></select></label>
+      <p><small>Demo payment only. No real money is charged and no card details are stored.</small></p>
+      <button onclick="confirmBooking()">Pay and confirm booking</button>
     </section>
     <section class="card">
       <h2>My bookings</h2>
@@ -136,7 +138,8 @@ function showUser(user) {
   byId('appSection').classList.toggle('hidden', !loggedIn);
   byId('logout').classList.toggle('hidden', !loggedIn);
   byId('who').textContent = loggedIn ? (user.FullName || user.Email) : '';
-  if (loggedIn) { loadAirports(); loadBookings(); } else { byId('password').value = ''; showTab('login'); }
+  if (loggedIn) { loadAirports(); loadBookings(); }
+  else { byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); }
 }
 const login = () => run(async () => {
   showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
@@ -165,6 +168,14 @@ const searchFlights = () => run(async () => {
         <td>${f.BasePrice}</td><td>${f.AvailableSeats}</td>
         <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
 });
+const loadUpcoming = () => run(async () => {
+  const flights = await api('/flights/upcoming');
+  byId('upcoming').innerHTML = flights.length === 0 ? '<tr><td>No upcoming flights.</td></tr>'
+    : '<tr><th>Flight</th><th>Route</th><th>Departs</th><th>From PKR</th><th>Free seats</th><th></th></tr>' +
+      flights.map(f => `<tr><td>${f.FlightNumber}</td><td>${f.OriginCode} to ${f.DestinationCode}</td><td>${showTime(f.DepartureTime)}</td>
+        <td>${f.BasePrice}</td><td>${f.AvailableSeats}</td>
+        <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
+});
 const chooseSeat = (flightId, flightNumber) => run(async () => {
   selectedFlightId = flightId;
   selectedSeat = null;
@@ -185,31 +196,32 @@ function selectSeat(button, seatNumber, price) {
 }
 const confirmBooking = () => run(async () => {
   if (!selectedSeat) throw new Error('Please click a seat first.');
-  const ticket = await api('/bookings', 'POST', {flightId: String(selectedFlightId), seatNumber: selectedSeat});
-  notify(`Booked! Seat ${ticket.SeatNumber}, PKR ${ticket.Price}`);
+  const ticket = await api('/bookings', 'POST', {flightId: String(selectedFlightId), seatNumber: selectedSeat,
+    paymentMethod: byId('paymentMethod').value});
+  notify(`Paid PKR ${ticket.Price} by ${ticket.PaymentMethod}. Ref: ${ticket.PaymentReference}`);
   byId('seatCard').classList.add('hidden');
   loadBookings();
   searchFlights();
 });
 const loadBookings = () => run(async () => {
   const bookings = await api('/bookings/mine');
-    loadUpcoming();
+  loadUpcoming();
   byId('bookings').innerHTML = bookings.length === 0 ? '<tr><td>No bookings yet.</td></tr>'
-    : '<tr><th>#</th><th>Flight</th><th>Route</th><th>Departs</th><th>Seat</th><th>Price</th><th>Status</th><th>Refund</th><th></th></tr>' +
+    : '<tr><th>#</th><th>Flight</th><th>Route</th><th>Departs</th><th>Seat</th><th>Price</th><th>Status</th><th>Payment</th><th>Refund</th><th></th></tr>' +
       bookings.map(b => `<tr><td>${b.BookingID}</td><td>${b.FlightNumber}</td><td>${b.OriginCode} to ${b.DestinationCode}</td>
         <td>${showTime(b.DepartureTime)}</td><td>${b.SeatNumber}</td><td>${b.Price}</td><td>${b.BookingStatus}</td>
-        <td>${b.RefundAmount ?? ''}</td>
-        <td>${b.BookingStatus === 'Confirmed' ? `<button class="danger" onclick="cancelBooking(${b.BookingID})">Cancel</button>` : ''}</td></tr>`).join('');
+        <td>${b.PaymentMethod ?? '-'}</td><td>${b.RefundAmount ?? ''}</td>
+        <td>${b.BookingStatus === 'Confirmed' ? `<button class="danger" onclick="cancelBooking(${b.BookingID}, ${b.ExpectedRefund ?? 0})">Cancel</button>` : ''}</td></tr>`).join('');
 });
-const cancelBooking = bookingId => run(async () => {
-  if (!confirm('Cancel this booking?')) return;
+const cancelBooking = (bookingId, expectedRefund) => run(async () => {
+  if (!confirm(`Cancel this booking? You will get PKR ${expectedRefund} back.`)) return;
   const result = await api(`/bookings/${bookingId}/cancel`, 'POST');
   notify(`Booking cancelled. Refund: PKR ${result.RefundAmount}`);
   loadBookings();
 });
 function showTab(tabName) {
-  byId('confirmPassword').classList.toggle('hidden', tabName !== 'register');
   const registering = tabName === 'register';
+  byId('confirmPassword').classList.toggle('hidden', !registering);
   byId('registerFields').classList.toggle('hidden', !registering);
   byId('loginButton').classList.toggle('hidden', registering);
   byId('registerButton').classList.toggle('hidden', !registering);
@@ -230,14 +242,7 @@ function setTheme(themeName) {
 let savedTheme = 'teal';
 try { savedTheme = localStorage.getItem('theme') || 'teal'; } catch (error) {}
 setTheme(savedTheme);
-const loadUpcoming = () => run(async () => {
-  const flights = await api('/flights/upcoming');
-  byId('upcoming').innerHTML = flights.length === 0 ? '<tr><td>No upcoming flights.</td></tr>'
-    : '<tr><th>Flight</th><th>Route</th><th>Departs</th><th>From PKR</th><th>Free seats</th><th></th></tr>' +
-      flights.map(f => `<tr><td>${f.FlightNumber}</td><td>${f.OriginCode} to ${f.DestinationCode}</td><td>${showTime(f.DepartureTime)}</td>
-        <td>${f.BasePrice}</td><td>${f.AvailableSeats}</td>
-        <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
-});
+byId('travelDate').valueAsDate = new Date(Date.now() + 8 * 86400000);
 api('/me').then(showUser).catch(() => showUser(null));
 </script>
 </body>

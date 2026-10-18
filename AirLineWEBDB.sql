@@ -8,6 +8,14 @@
 
    Parts: 0 Reset | 1 Tables | 2 Procedures | 3 Sample data | 4 App login | 5 Tests
    ===================================================================== */
+USE master;
+GO
+IF DB_ID('AirlineWEBDB') IS NOT NULL
+BEGIN
+    ALTER DATABASE AirlineWEBDB SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE AirlineWEBDB;
+END
+GO
 CREATE DATABASE AirlineWEBDB;
 GO
 USE AirlineWEBDB;
@@ -135,6 +143,8 @@ CREATE TABLE Payments (
     Method    VARCHAR(20)       NOT NULL,
     Status    VARCHAR(20)       NOT NULL,
     Reference VARCHAR(30)       NOT NULL,
+    PayerName   VARCHAR(100)    NULL,
+    AccountMask VARCHAR(30)     NULL,
     CreatedAt DATETIME2(0)      NOT NULL CONSTRAINT DF_Payments_CreatedAt DEFAULT SYSDATETIME(),
     CONSTRAINT PK_Payments PRIMARY KEY (PaymentID),
     CONSTRAINT FK_Payments_Booking FOREIGN KEY (BookingID) REFERENCES Bookings(BookingID),
@@ -301,7 +311,8 @@ END;
 GO
 -- Book a seat and record the (simulated) payment in the same transaction.
 CREATE OR ALTER PROCEDURE usp_BookFlight
-    @PassengerID INT, @FlightID INT, @SeatNumber VARCHAR(10), @PaymentMethod VARCHAR(20) = 'Card'
+    @PassengerID INT, @FlightID INT, @SeatNumber VARCHAR(10), @PaymentMethod VARCHAR(20) = 'Card',
+    @PayerName VARCHAR(100) = NULL, @AccountMask VARCHAR(30) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -313,6 +324,8 @@ BEGIN
         BEGIN TRANSACTION;
         IF @PaymentMethod NOT IN ('Card', 'JazzCash', 'Easypaisa', 'Bank Transfer')
             THROW 50046, 'Please choose a valid payment method.', 1;
+        IF @AccountMask LIKE '%[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]%'
+            THROW 50047, 'Full card or account numbers must never be sent to the database.', 1;
         SELECT @DepartureTime = DepartureTime, @FlightStatus = Status, @BasePrice = BasePrice
         FROM Flights WHERE FlightID = @FlightID;
         IF @FlightStatus IS NULL
@@ -336,11 +349,11 @@ BEGIN
         INSERT INTO Tickets (BookingID, FlightID, SeatNumber, Price) VALUES (@NewBookingID, @FlightID, @SeatNumber, @Price);
         SET @NewTicketID = SCOPE_IDENTITY();
         SET @Reference = 'PAY-' + RIGHT(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', ''), 10);
-        INSERT INTO Payments (BookingID, Amount, Method, Status, Reference)
-        VALUES (@NewBookingID, @Price, @PaymentMethod, 'Paid', @Reference);
+        INSERT INTO Payments (BookingID, Amount, Method, Status, Reference, PayerName, AccountMask)
+        VALUES (@NewBookingID, @Price, @PaymentMethod, 'Paid', @Reference, @PayerName, @AccountMask);
         COMMIT TRANSACTION;
         SELECT @NewBookingID AS BookingID, @NewTicketID AS TicketID, @SeatNumber AS SeatNumber,
-               @Price AS Price, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference;
+               @Price AS Price, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference, @AccountMask AS AccountMask;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
@@ -401,7 +414,7 @@ BEGIN
     SET NOCOUNT ON;
     SELECT b.BookingID, b.Status AS BookingStatus, b.BookingDate, f.FlightNumber, f.OriginCode, f.DestinationCode,
            f.DepartureTime, f.ArrivalTime, t.SeatNumber, t.Price, t.RefundAmount,
-           pay.Method AS PaymentMethod, pay.Reference AS PaymentReference,
+           pay.Method AS PaymentMethod, pay.Reference AS PaymentReference, pay.AccountMask AS AccountMask,
            CASE WHEN b.Status = 'Confirmed' THEN CAST(
                CASE WHEN f.DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN t.Price
                     WHEN f.DepartureTime > DATEADD(HOUR, 24, SYSDATETIME()) THEN t.Price * 0.50
@@ -409,7 +422,7 @@ BEGIN
     FROM Bookings b
     JOIN Flights f ON f.FlightID = b.FlightID
     JOIN Tickets t ON t.BookingID = b.BookingID
-    OUTER APPLY (SELECT TOP 1 Method, Reference FROM Payments
+    OUTER APPLY (SELECT TOP 1 Method, Reference, AccountMask FROM Payments
                  WHERE BookingID = b.BookingID AND Status = 'Paid' ORDER BY PaymentID) pay
     WHERE b.PassengerID = @PassengerID
     ORDER BY f.DepartureTime DESC;

@@ -48,6 +48,20 @@ tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
 @keyframes fly{0%,100%{transform:translate(-8px,2px) rotate(-6deg)}50%{transform:translate(8px,-6px) rotate(4deg)}}
 @media (prefers-reduced-motion:reduce){.plane,.auth{animation:none}}
+.summary{background:color-mix(in srgb,var(--primary) 8%,white);border-radius:8px;padding:10px 14px;margin:8px 0 14px;font-size:14px}
+.summary b{color:var(--primary-dark)}
+.methods{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
+.method{background:color-mix(in srgb,var(--primary) 10%,white);color:var(--primary-dark);border:1px solid color-mix(in srgb,var(--primary) 35%,white)}
+.method.active{background:var(--primary);color:#fff}
+.f{display:block;font-size:13px;color:#475569;flex:1;min-width:150px}
+.f input,.f select{display:block;width:100%;box-sizing:border-box;margin:4px 0 8px;color:var(--text)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:8px 0}
+.check input{margin:3px 0 0}
+button.secondary{background:#e2e8f0;color:var(--text)}
+button.secondary:hover{background:#cbd5e1}
+button:disabled{opacity:.6;cursor:wait}
+.receipt td:first-child{color:#64748b;width:40%}
 </style>
 </head>
 <body>
@@ -100,9 +114,54 @@ tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
       <p>Yellow seats are Business class. Hover a seat to see its price.</p>
       <div id="seats"></div>
       <p id="selection"></p>
-      <label>Pay with: <select id="paymentMethod"><option>Card</option><option>JazzCash</option><option>Easypaisa</option><option>Bank Transfer</option></select></label>
-      <p><small>Demo payment only. No real money is charged and no card details are stored.</small></p>
-      <button onclick="confirmBooking()">Pay and confirm booking</button>
+      <button onclick="goToPayment()">Continue to payment</button>
+    </section>
+    <section id="paymentSection" class="card hidden">
+      <h2>Payment</h2>
+      <div class="summary" id="orderSummary"></div>
+      <div class="methods">
+        <button class="method active" data-method="Card" onclick="showMethod('Card')">Card</button>
+        <button class="method" data-method="JazzCash" onclick="showMethod('JazzCash')">JazzCash</button>
+        <button class="method" data-method="Easypaisa" onclick="showMethod('Easypaisa')">Easypaisa</button>
+        <button class="method" data-method="Bank Transfer" onclick="showMethod('Bank Transfer')">Bank transfer</button>
+      </div>
+      <div id="cardFields">
+        <label class="f">Name on card<input id="cardName" autocomplete="cc-name"></label>
+        <label class="f">Card number<input id="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" oninput="formatCard(this)"></label>
+        <div class="row">
+          <label class="f">Expiry (MM/YY)<input id="cardExpiry" inputmode="numeric" autocomplete="cc-exp" placeholder="08/29" oninput="formatExpiry(this)"></label>
+          <label class="f">CVV<input id="cardCvv" type="password" inputmode="numeric" maxlength="4" autocomplete="cc-csc"></label>
+        </div>
+        <label class="f">Billing address<input id="billAddress" autocomplete="street-address"></label>
+        <div class="row">
+          <label class="f">City<input id="billCity" autocomplete="address-level2"></label>
+          <label class="f">Postal code<input id="billPostal" autocomplete="postal-code"></label>
+          <label class="f">Country<select id="billCountry"><option>Pakistan</option><option>Other</option></select></label>
+        </div>
+      </div>
+      <div id="walletFields" class="hidden">
+        <label class="f">Account holder name<input id="walletName"></label>
+        <div class="row">
+          <label class="f"><span id="walletLabel">Wallet</span> mobile number<input id="walletMobile" inputmode="tel" placeholder="0300-1234567"></label>
+          <label class="f">MPIN (4 or 5 digits)<input id="walletPin" type="password" inputmode="numeric" maxlength="5"></label>
+        </div>
+      </div>
+      <div id="bankFields" class="hidden">
+        <label class="f">Your bank<select id="bankName"><option value="">Select a bank</option><option>HBL</option><option>UBL</option><option>MCB</option><option>Meezan Bank</option><option>Allied Bank</option><option>Bank Alfalah</option><option>Standard Chartered</option><option>Other</option></select></label>
+        <label class="f">Account title<input id="bankTitle"></label>
+        <label class="f">IBAN or account number<input id="bankAccount" placeholder="PK36SCBL0000001123456702"></label>
+        <label class="f">Transaction reference from your bank<input id="bankRef"></label>
+      </div>
+      <label class="f">Email for the receipt<input id="receiptEmail" type="email" autocomplete="email"></label>
+      <label class="check"><input type="checkbox" id="agree"><span>I accept the fare rules and refund policy (100% refund more than 48 hours before departure, 50% from 24 to 48 hours, none after that).</span></label>
+      <p><small>Demo payment only. No real money is charged. Card numbers, CVV and PINs are checked in your browser and never sent or stored. Only the last digits are saved.</small></p>
+      <button class="secondary" onclick="backToSeats()">Back to seats</button>
+      <button id="payButton" onclick="payNow()">Pay now</button>
+    </section>
+    <section id="receiptCard" class="card hidden">
+      <h2>Payment received</h2>
+      <table class="receipt"><tbody id="receiptBody"></tbody></table>
+      <button onclick="byId('receiptCard').classList.add('hidden')">Close</button>
     </section>
     <section class="card">
       <h2>My bookings</h2>
@@ -113,6 +172,9 @@ tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
 <script>
 let selectedFlightId = null;
 let selectedSeat = null;
+let selectedPrice = 0;
+let selectedFlightNumber = '';
+let payMethod = 'Card';
 const byId = id => document.getElementById(id);
 const showTime = text => String(text).replace('T', ' ');
 function notify(text, isError) {
@@ -138,8 +200,8 @@ function showUser(user) {
   byId('appSection').classList.toggle('hidden', !loggedIn);
   byId('logout').classList.toggle('hidden', !loggedIn);
   byId('who').textContent = loggedIn ? (user.FullName || user.Email) : '';
-  if (loggedIn) { loadAirports(); loadBookings(); }
-  else { byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); }
+  if (loggedIn) { loadAirports(); loadBookings(); byId('receiptEmail').value = user.Email || ''; }
+  else { ['seatCard', 'paymentSection', 'receiptCard'].forEach(id => byId(id).classList.add('hidden')); clearPayment(); byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); }
 }
 const login = () => run(async () => {
   showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
@@ -178,7 +240,9 @@ const loadUpcoming = () => run(async () => {
 });
 const chooseSeat = (flightId, flightNumber) => run(async () => {
   selectedFlightId = flightId;
+  selectedFlightNumber = flightNumber;
   selectedSeat = null;
+  byId('paymentSection').classList.add('hidden');
   byId('selection').textContent = '';
   byId('seatTitle').textContent = 'Choose your seat on ' + flightNumber;
   const seats = await api(`/flights/${flightId}/seats`);
@@ -192,16 +256,105 @@ function selectSeat(button, seatNumber, price) {
   document.querySelectorAll('#seats button').forEach(b => b.classList.remove('chosen'));
   button.classList.add('chosen');
   selectedSeat = seatNumber;
+  selectedPrice = price;
   byId('selection').textContent = `Seat ${seatNumber} - PKR ${price}`;
 }
-const confirmBooking = () => run(async () => {
+const digits = text => String(text).replace(/\D/g, '');
+function luhnOk(number) {
+  let sum = 0, double = false;
+  for (let i = number.length - 1; i >= 0; i--) {
+    let d = Number(number[i]);
+    if (double) { d *= 2; if (d > 9) d -= 9; }
+    sum += d; double = !double;
+  }
+  return sum % 10 === 0;
+}
+function formatCard(box) { box.value = digits(box.value).slice(0, 19).replace(/(.{4})/g, '$1 ').trim(); }
+function formatExpiry(box) {
+  const d = digits(box.value).slice(0, 4);
+  box.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+}
+function showMethod(method) {
+  payMethod = method;
+  const wallet = method === 'JazzCash' || method === 'Easypaisa';
+  byId('cardFields').classList.toggle('hidden', method !== 'Card');
+  byId('walletFields').classList.toggle('hidden', !wallet);
+  byId('bankFields').classList.toggle('hidden', method !== 'Bank Transfer');
+  byId('walletLabel').textContent = method;
+  document.querySelectorAll('.method').forEach(b => b.classList.toggle('active', b.dataset.method === method));
+}
+function clearPayment() {
+  ['cardName', 'cardNumber', 'cardExpiry', 'cardCvv', 'billAddress', 'billCity', 'billPostal',
+   'walletName', 'walletMobile', 'walletPin', 'bankTitle', 'bankAccount', 'bankRef'].forEach(id => byId(id).value = '');
+  byId('bankName').value = '';
+  byId('agree').checked = false;
+}
+const goToPayment = () => run(async () => {
   if (!selectedSeat) throw new Error('Please click a seat first.');
-  const ticket = await api('/bookings', 'POST', {flightId: String(selectedFlightId), seatNumber: selectedSeat,
-    paymentMethod: byId('paymentMethod').value});
-  notify(`Paid PKR ${ticket.Price} by ${ticket.PaymentMethod}. Ref: ${ticket.PaymentReference}`);
+  byId('orderSummary').innerHTML = `Flight <b>${selectedFlightNumber}</b> &middot; Seat <b>${selectedSeat}</b><br>Total to pay: <b>PKR ${Number(selectedPrice).toLocaleString()}</b>`;
+  byId('payButton').textContent = `Pay PKR ${Number(selectedPrice).toLocaleString()}`;
   byId('seatCard').classList.add('hidden');
-  loadBookings();
-  searchFlights();
+  byId('paymentSection').classList.remove('hidden');
+  byId('paymentSection').scrollIntoView({behavior: 'smooth'});
+});
+function backToSeats() {
+  byId('paymentSection').classList.add('hidden');
+  byId('seatCard').classList.remove('hidden');
+  byId('seatCard').scrollIntoView({behavior: 'smooth'});
+}
+function collectPayment() {
+  const need = (ok, message) => { if (!ok) throw new Error(message); };
+  const email = byId('receiptEmail').value.trim();
+  need(/^\S+@\S+\.\S+$/.test(email), 'Enter a valid email for the receipt.');
+  let payerName, accountMask;
+  if (payMethod === 'Card') {
+    payerName = byId('cardName').value.trim();
+    need(payerName.length >= 3, 'Enter the name on the card.');
+    const number = digits(byId('cardNumber').value);
+    need(number.length === 16, 'The card number must be 16 digits.');
+    need(digits(byId('cardExpiry').value).length === 4, 'Enter the expiry date as MM/YY (4 digits).');
+    need(/^\d{3,4}$/.test(byId('cardCvv').value), 'The CVV must be 3 or 4 digits.');
+    need(byId('billAddress').value.trim().length >= 5 && byId('billCity').value.trim() && byId('billPostal').value.trim(),
+      'Enter your full billing address, city and postal code.');
+    accountMask = '**** ' + number.slice(-4);
+  } else if (payMethod === 'Bank Transfer') {
+    need(byId('bankName').value, 'Select your bank.');
+    payerName = byId('bankTitle').value.trim();
+    need(payerName.length >= 3, 'Enter the account title.');
+    const account = byId('bankAccount').value.replace(/\s/g, '').toUpperCase();
+    need(/^PK\d{2}[A-Z]{4}\d{16}$/.test(account) || /^\d{8,20}$/.test(account), 'Enter a valid IBAN (PK + 22 characters) or account number.');
+    need(byId('bankRef').value.trim().length >= 6, 'Enter the transaction reference from your bank.');
+    accountMask = '**** ' + account.slice(-4);
+  } else {
+    payerName = byId('walletName').value.trim();
+    need(payerName.length >= 3, 'Enter the account holder name.');
+    const mobile = digits(byId('walletMobile').value);
+    need(/^03\d{9}$/.test(mobile), 'Enter a mobile number like 0300-1234567.');
+    need(/^\d{4,5}$/.test(byId('walletPin').value), 'Enter your 4 or 5 digit MPIN.');
+    accountMask = mobile.slice(0, 4) + '***' + mobile.slice(-3);
+  }
+  need(byId('agree').checked, 'Please accept the fare rules and refund policy.');
+  return {payerName, accountMask, email};
+}
+const payNow = () => run(async () => {
+  const payment = collectPayment();
+  byId('payButton').disabled = true;
+  try {
+    const ticket = await api('/bookings', 'POST', {flightId: String(selectedFlightId), seatNumber: selectedSeat,
+      paymentMethod: payMethod, payerName: payment.payerName, accountMask: payment.accountMask});
+    byId('receiptBody').innerHTML =
+      `<tr><td>Reference</td><td>${ticket.PaymentReference}</td></tr><tr><td>Flight</td><td>${selectedFlightNumber}</td></tr>` +
+      `<tr><td>Seat</td><td>${ticket.SeatNumber}</td></tr><tr><td>Amount paid</td><td>PKR ${Number(ticket.Price).toLocaleString()}</td></tr>` +
+      `<tr><td>Method</td><td>${ticket.PaymentMethod} ${ticket.AccountMask ?? ''}</td></tr><tr><td>Receipt sent to</td><td>${payment.email}</td></tr>`;
+    clearPayment();
+    byId('paymentSection').classList.add('hidden');
+    byId('receiptCard').classList.remove('hidden');
+    byId('receiptCard').scrollIntoView({behavior: 'smooth'});
+    loadBookings();
+    searchFlights();
+  } finally {
+    byId('payButton').disabled = false;
+  }
 });
 const loadBookings = () => run(async () => {
   const bookings = await api('/bookings/mine');
@@ -210,7 +363,7 @@ const loadBookings = () => run(async () => {
     : '<tr><th>#</th><th>Flight</th><th>Route</th><th>Departs</th><th>Seat</th><th>Price</th><th>Status</th><th>Payment</th><th>Refund</th><th></th></tr>' +
       bookings.map(b => `<tr><td>${b.BookingID}</td><td>${b.FlightNumber}</td><td>${b.OriginCode} to ${b.DestinationCode}</td>
         <td>${showTime(b.DepartureTime)}</td><td>${b.SeatNumber}</td><td>${b.Price}</td><td>${b.BookingStatus}</td>
-        <td>${b.PaymentMethod ?? '-'}</td><td>${b.RefundAmount ?? ''}</td>
+        <td>${b.PaymentMethod ? b.PaymentMethod + ' ' + (b.AccountMask ?? '') : '-'}</td><td>${b.RefundAmount ?? ''}</td>
         <td>${b.BookingStatus === 'Confirmed' ? `<button class="danger" onclick="cancelBooking(${b.BookingID}, ${b.ExpectedRefund ?? 0})">Cancel</button>` : ''}</td></tr>`).join('');
 });
 const cancelBooking = (bookingId, expectedRefund) => run(async () => {

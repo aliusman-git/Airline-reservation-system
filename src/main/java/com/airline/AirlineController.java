@@ -71,9 +71,9 @@ public class AirlineController {
     }
     @PostMapping("/bookings")
     public Map<String, Object> book(@RequestBody Map<String, String> body, HttpSession session) {
-        return jdbc.queryForMap("EXEC usp_BookFlight ?, ?, ?, ?",
+        return jdbc.queryForMap("EXEC usp_BookFlight ?, ?, ?, ?, ?, ?",
             requirePassengerId(session), Integer.parseInt(body.get("flightId")), body.get("seatNumber"),
-            body.getOrDefault("paymentMethod", "Card"));
+            body.getOrDefault("paymentMethod", "Card"), body.get("payerName"), body.get("accountMask"));
     }
     @GetMapping("/bookings/mine")
     public List<Map<String, Object>> myBookings(HttpSession session) {

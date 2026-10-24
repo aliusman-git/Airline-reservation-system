@@ -60,6 +60,15 @@ public class AirlineController {
     public List<Map<String, Object>> availableSeats(@PathVariable int flightId) {
         return jdbc.queryForList("EXEC usp_GetAvailableSeats ?", flightId);
     }
+        @GetMapping("/flights/{flightId}/group-seats")
+    public List<Map<String, Object>> groupSeats(@PathVariable int flightId, @RequestParam int size) {
+        return jdbc.queryForList("EXEC usp_FindAdjacentSeats ?, ?", flightId, size);
+    }
+    @PostMapping("/bookings/group")
+    public Map<String, Object> bookGroup(@RequestBody Map<String, String> body, HttpSession session) {
+        return jdbc.queryForMap("EXEC usp_BookGroup ?, ?, ?, ?", requirePassengerId(session),
+            Integer.parseInt(body.get("flightId")), body.get("seatNumbers"), body.getOrDefault("paymentMethod", "Card"));
+    }
     @GetMapping("/flights/upcoming")
     public List<Map<String, Object>> upcomingFlights() {
         return readable(jdbc.queryForList("EXEC usp_GetUpcomingFlights"));

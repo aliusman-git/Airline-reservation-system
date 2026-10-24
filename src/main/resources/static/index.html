@@ -112,6 +112,8 @@ button:disabled{opacity:.6;cursor:wait}
     <section id="seatCard" class="card hidden">
       <h2 id="seatTitle">Choose your seat</h2>
       <p>Yellow seats are Business class. Hover a seat to see its price.</p>
+      <p>Travelling together? <input id="groupSize" type="number" min="2" max="6" value="4" style="width:70px"> <button onclick="findGroupSeats()">Find seats together</button></p>
+      <div id="groupOptions"></div>
       <div id="seats"></div>
       <p id="selection"></p>
       <button onclick="goToPayment()">Continue to payment</button>
@@ -372,6 +374,16 @@ const cancelBooking = (bookingId, expectedRefund) => run(async () => {
   notify(`Booking cancelled. Refund: PKR ${result.RefundAmount}`);
   loadBookings();
 });
+const findGroupSeats = () => run(async () => {
+  const options = await api(`/flights/${selectedFlightId}/group-seats?size=${byId('groupSize').value}`);
+  byId('groupOptions').innerHTML = options.length === 0 ? '<p>No seats together for that group size. Try a smaller group.</p>'
+    : options.map(o => `<button onclick="pickGroup('${o.Seats}', ${o.TotalPrice})">${o.Seats.replaceAll(',', ', ')} - PKR ${o.TotalPrice}${o.CrossesAisle ? ' (across the aisle)' : ''}</button>`).join('');
+});
+function pickGroup(seatList, totalPrice) {
+  document.querySelectorAll('#seats button').forEach(b => b.classList.toggle('chosen', seatList.split(',').includes(b.textContent)));
+  selectedSeat = seatList;
+  byId('selection').textContent = `Group seats ${seatList.replaceAll(',', ', ')} - PKR ${totalPrice}`;
+}
 function showTab(tabName) {
   const registering = tabName === 'register';
   byId('confirmPassword').classList.toggle('hidden', !registering);

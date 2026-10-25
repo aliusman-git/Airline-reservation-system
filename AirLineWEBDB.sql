@@ -8,6 +8,8 @@
 
    Parts: 0 Reset | 1 Tables | 2 Procedures | 3 Sample data | 4 App login | 5 Tests
    ===================================================================== */
+
+/* ---------------- PART 0 - Reset database ---------------- */
 USE master;
 GO
 IF DB_ID('AirlineWEBDB') IS NOT NULL
@@ -125,7 +127,6 @@ CREATE TABLE Tickets (
     IssueDate    DATETIME2(0)      NOT NULL CONSTRAINT DF_Tickets_Issue DEFAULT SYSDATETIME(),
     RefundAmount DECIMAL(10,2)     NULL,
     CONSTRAINT PK_Tickets PRIMARY KEY (TicketID),
-    CONSTRAINT UQ_Tickets_Booking UNIQUE (BookingID),
     CONSTRAINT FK_Tickets_Booking FOREIGN KEY (BookingID, FlightID) REFERENCES Bookings(BookingID, FlightID),
     CONSTRAINT FK_Tickets_Seat FOREIGN KEY (FlightID, SeatNumber) REFERENCES Seats(FlightID, SeatNumber),
     CONSTRAINT CK_Tickets_Price CHECK (Price >= 0),
@@ -133,6 +134,7 @@ CREATE TABLE Tickets (
 );
 GO
 CREATE UNIQUE INDEX UX_Tickets_ActiveSeat ON Tickets (FlightID, SeatNumber) WHERE Status = 'Active';
+CREATE INDEX IX_Tickets_Booking ON Tickets (BookingID);
 GO
 -- Simulated payments: one 'Paid' row per booking, plus a 'Refunded' row on a refundable cancellation.
 -- No card numbers are ever stored.
@@ -143,8 +145,8 @@ CREATE TABLE Payments (
     Method    VARCHAR(20)       NOT NULL,
     Status    VARCHAR(20)       NOT NULL,
     Reference VARCHAR(30)       NOT NULL,
-    PayerName   VARCHAR(100)    NULL,
-    AccountMask VARCHAR(30)     NULL,
+    PayerName VARCHAR(100)      NULL,
+    AccountMask VARCHAR(8)      NULL,
     CreatedAt DATETIME2(0)      NOT NULL CONSTRAINT DF_Payments_CreatedAt DEFAULT SYSDATETIME(),
     CONSTRAINT PK_Payments PRIMARY KEY (PaymentID),
     CONSTRAINT FK_Payments_Booking FOREIGN KEY (BookingID) REFERENCES Bookings(BookingID),
@@ -312,7 +314,7 @@ GO
 -- Book a seat and record the (simulated) payment in the same transaction.
 CREATE OR ALTER PROCEDURE usp_BookFlight
     @PassengerID INT, @FlightID INT, @SeatNumber VARCHAR(10), @PaymentMethod VARCHAR(20) = 'Card',
-    @PayerName VARCHAR(100) = NULL, @AccountMask VARCHAR(30) = NULL
+    @PayerName VARCHAR(100) = NULL, @AccountMask VARCHAR(8) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -324,8 +326,10 @@ BEGIN
         BEGIN TRANSACTION;
         IF @PaymentMethod NOT IN ('Card', 'JazzCash', 'Easypaisa', 'Bank Transfer')
             THROW 50046, 'Please choose a valid payment method.', 1;
-        IF @AccountMask LIKE '%[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]%'
-            THROW 50047, 'Full card or account numbers must never be sent to the database.', 1;
+        IF LEN(LTRIM(RTRIM(ISNULL(@PayerName, '')))) < 2
+            THROW 50049, 'Please enter the payer name.', 1;
+        IF @AccountMask IS NULL OR @AccountMask NOT LIKE '****[0-9][0-9][0-9][0-9]'
+            THROW 50049, 'Please enter a valid card, account or mobile number.', 1;
         SELECT @DepartureTime = DepartureTime, @FlightStatus = Status, @BasePrice = BasePrice
         FROM Flights WHERE FlightID = @FlightID;
         IF @FlightStatus IS NULL
@@ -350,7 +354,7 @@ BEGIN
         SET @NewTicketID = SCOPE_IDENTITY();
         SET @Reference = 'PAY-' + RIGHT(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', ''), 10);
         INSERT INTO Payments (BookingID, Amount, Method, Status, Reference, PayerName, AccountMask)
-        VALUES (@NewBookingID, @Price, @PaymentMethod, 'Paid', @Reference, @PayerName, @AccountMask);
+        VALUES (@NewBookingID, @Price, @PaymentMethod, 'Paid', @Reference, LTRIM(RTRIM(@PayerName)), @AccountMask);
         COMMIT TRANSACTION;
         SELECT @NewBookingID AS BookingID, @NewTicketID AS TicketID, @SeatNumber AS SeatNumber,
                @Price AS Price, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference, @AccountMask AS AccountMask;
@@ -382,13 +386,16 @@ BEGIN
         SELECT @DepartureTime = DepartureTime FROM Flights WHERE FlightID = @FlightID;
         IF @DepartureTime <= SYSDATETIME()
             THROW 50052, 'A flight that has already departed cannot be cancelled.', 1;
-        SELECT @Price = Price FROM Tickets WHERE BookingID = @BookingID AND Status = 'Active';
+        SELECT @Price = SUM(Price) FROM Tickets WHERE BookingID = @BookingID AND Status = 'Active';
         SET @Refund = CAST(
             CASE WHEN @DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN @Price
                  WHEN @DepartureTime > DATEADD(HOUR, 24, SYSDATETIME()) THEN @Price * 0.50
                  ELSE 0 END AS DECIMAL(10,2));
         UPDATE Bookings SET Status = 'Cancelled', CancelledAt = SYSDATETIME() WHERE BookingID = @BookingID;
-        UPDATE Tickets SET Status = 'Cancelled', RefundAmount = @Refund WHERE BookingID = @BookingID AND Status = 'Active';
+        UPDATE Tickets
+        SET Status = 'Cancelled',
+            RefundAmount = CAST(CASE WHEN @Price = 0 THEN 0 ELSE Price * @Refund / @Price END AS DECIMAL(10,2))
+        WHERE BookingID = @BookingID AND Status = 'Active';
         IF @Refund > 0
         BEGIN
             SELECT TOP 1 @RefundMethod = Method FROM Payments
@@ -413,19 +420,139 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT b.BookingID, b.Status AS BookingStatus, b.BookingDate, f.FlightNumber, f.OriginCode, f.DestinationCode,
-           f.DepartureTime, f.ArrivalTime, t.SeatNumber, t.Price, t.RefundAmount,
-           pay.Method AS PaymentMethod, pay.Reference AS PaymentReference, pay.AccountMask AS AccountMask,
+           f.DepartureTime, f.ArrivalTime, tk.SeatNumbers AS SeatNumber, tk.TotalPrice AS Price, tk.TotalRefund AS RefundAmount,
+           pay.Method AS PaymentMethod, pay.Reference AS PaymentReference,
            CASE WHEN b.Status = 'Confirmed' THEN CAST(
-               CASE WHEN f.DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN t.Price
-                    WHEN f.DepartureTime > DATEADD(HOUR, 24, SYSDATETIME()) THEN t.Price * 0.50
+               CASE WHEN f.DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN tk.TotalPrice
+                    WHEN f.DepartureTime > DATEADD(HOUR, 24, SYSDATETIME()) THEN tk.TotalPrice * 0.50
                     ELSE 0 END AS DECIMAL(10,2)) END AS ExpectedRefund
     FROM Bookings b
     JOIN Flights f ON f.FlightID = b.FlightID
-    JOIN Tickets t ON t.BookingID = b.BookingID
-    OUTER APPLY (SELECT TOP 1 Method, Reference, AccountMask FROM Payments
+    CROSS APPLY (SELECT STRING_AGG(t.SeatNumber, ', ') WITHIN GROUP (ORDER BY t.SeatNumber) AS SeatNumbers,
+                        SUM(t.Price) AS TotalPrice, SUM(t.RefundAmount) AS TotalRefund
+                 FROM Tickets t WHERE t.BookingID = b.BookingID) tk
+    OUTER APPLY (SELECT TOP 1 Method, Reference FROM Payments
                  WHERE BookingID = b.BookingID AND Status = 'Paid' ORDER BY PaymentID) pay
     WHERE b.PassengerID = @PassengerID
     ORDER BY f.DepartureTime DESC;
+END;
+GO
+-- Group seat finder: suggests up to 3 blocks of neighbouring free seats in one row.
+-- Blocks that do not cross the aisle (between seats C and D) come first, then the front rows.
+CREATE OR ALTER PROCEDURE usp_FindAdjacentSeats
+    @FlightID INT,
+    @GroupSize INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF @GroupSize < 2 OR @GroupSize > 6
+        THROW 50047, 'A group needs 2 to 6 seats.', 1;
+    DECLARE @BasePrice DECIMAL(10,2) = (SELECT BasePrice FROM Flights WHERE FlightID = @FlightID);
+    IF @BasePrice IS NULL
+        THROW 50040, 'Flight does not exist.', 1;
+    -- Work out the free seats ONCE, then search blocks inside that small list.
+    CREATE TABLE #Free (
+        RowNo INT NOT NULL, Col INT NOT NULL, SeatNumber VARCHAR(10) NOT NULL, Price DECIMAL(10,2) NOT NULL,
+        PRIMARY KEY (RowNo, Col));
+    INSERT INTO #Free (RowNo, Col, SeatNumber, Price)
+    SELECT CAST(LEFT(s.SeatNumber, LEN(s.SeatNumber) - 1) AS INT), ASCII(RIGHT(s.SeatNumber, 1)) - 64,
+           s.SeatNumber, CAST(@BasePrice * s.PriceMultiplier AS DECIMAL(10,2))
+    FROM Seats s
+    LEFT JOIN Tickets t ON t.FlightID = s.FlightID AND t.SeatNumber = s.SeatNumber AND t.Status = 'Active'
+    WHERE s.FlightID = @FlightID AND t.TicketID IS NULL;
+    SELECT TOP (3) a.RowNo,
+           CASE WHEN a.Col <= 3 AND a.Col + @GroupSize - 1 >= 4 THEN 1 ELSE 0 END AS CrossesAisle,
+           STRING_AGG(b.SeatNumber, ',') WITHIN GROUP (ORDER BY b.Col) AS Seats,
+           CAST(SUM(b.Price) AS DECIMAL(10,2)) AS TotalPrice
+    FROM #Free a
+    JOIN #Free b ON b.RowNo = a.RowNo AND b.Col BETWEEN a.Col AND a.Col + @GroupSize - 1
+    GROUP BY a.RowNo, a.Col
+    HAVING COUNT(*) = @GroupSize
+    ORDER BY CASE WHEN a.Col <= 3 AND a.Col + @GroupSize - 1 >= 4 THEN 1 ELSE 0 END, a.RowNo, a.Col;
+END;
+GO
+-- Group booking: 2 to 6 neighbouring seats, one booking, one payment. All seats or none.
+CREATE OR ALTER PROCEDURE usp_BookGroup
+    @PassengerID INT,
+    @FlightID INT,
+    @SeatNumbers VARCHAR(200),
+    @PaymentMethod VARCHAR(20) = 'Card',
+    @PayerName VARCHAR(100) = NULL,
+    @AccountMask VARCHAR(8) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @DepartureTime DATETIME2(0), @FlightStatus VARCHAR(20), @BasePrice DECIMAL(10,2);
+    DECLARE @SeatCount INT, @FoundCount INT, @Total DECIMAL(10,2), @NewBookingID INT, @Reference VARCHAR(30);
+    DECLARE @Wanted TABLE (SeatNumber VARCHAR(10) PRIMARY KEY);
+    INSERT INTO @Wanted
+    SELECT DISTINCT UPPER(LTRIM(RTRIM(value))) FROM STRING_SPLIT(@SeatNumbers, ',') WHERE LTRIM(RTRIM(value)) <> '';
+    SELECT @SeatCount = COUNT(*) FROM @Wanted;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF @PaymentMethod NOT IN ('Card', 'JazzCash', 'Easypaisa', 'Bank Transfer')
+            THROW 50046, 'Please choose a valid payment method.', 1;
+        IF LEN(LTRIM(RTRIM(ISNULL(@PayerName, '')))) < 2
+            THROW 50049, 'Please enter the payer name.', 1;
+        IF @AccountMask IS NULL OR @AccountMask NOT LIKE '****[0-9][0-9][0-9][0-9]'
+            THROW 50049, 'Please enter a valid card, account or mobile number.', 1;
+        IF @SeatCount < 2 OR @SeatCount > 6
+            THROW 50047, 'A group booking needs 2 to 6 seats.', 1;
+        IF (SELECT COUNT(DISTINCT CAST(LEFT(SeatNumber, LEN(SeatNumber) - 1) AS INT)) FROM @Wanted) <> 1
+           OR (SELECT MAX(ASCII(RIGHT(SeatNumber, 1))) - MIN(ASCII(RIGHT(SeatNumber, 1))) FROM @Wanted) <> @SeatCount - 1
+            THROW 50048, 'Group seats must be next to each other in the same row.', 1;
+        SELECT @DepartureTime = DepartureTime, @FlightStatus = Status, @BasePrice = BasePrice
+        FROM Flights WHERE FlightID = @FlightID;
+        IF @FlightStatus IS NULL
+            THROW 50040, 'Flight does not exist.', 1;
+        IF @FlightStatus <> 'Scheduled' OR @DepartureTime <= SYSDATETIME()
+            THROW 50041, 'This flight is not open for booking.', 1;
+        IF NOT EXISTS (SELECT 1 FROM Passengers WHERE PassengerID = @PassengerID)
+            THROW 50042, 'Passenger does not exist.', 1;
+        SELECT @FoundCount = COUNT(*) FROM Seats WITH (UPDLOCK, HOLDLOCK)
+        WHERE FlightID = @FlightID AND SeatNumber IN (SELECT SeatNumber FROM @Wanted);
+        IF @FoundCount <> @SeatCount
+            THROW 50043, 'One of the seats does not exist on this flight.', 1;
+        IF EXISTS (SELECT 1 FROM Tickets WHERE FlightID = @FlightID AND Status = 'Active'
+                   AND SeatNumber IN (SELECT SeatNumber FROM @Wanted))
+            THROW 50044, 'One of these seats is already taken.', 1;
+        IF EXISTS (SELECT 1 FROM Bookings WHERE PassengerID = @PassengerID AND FlightID = @FlightID AND Status = 'Confirmed')
+            THROW 50045, 'You already have a confirmed booking on this flight.', 1;
+        INSERT INTO Bookings (PassengerID, FlightID, Status) VALUES (@PassengerID, @FlightID, 'Confirmed');
+        SET @NewBookingID = SCOPE_IDENTITY();
+        INSERT INTO Tickets (BookingID, FlightID, SeatNumber, Price)
+        SELECT @NewBookingID, @FlightID, s.SeatNumber, CAST(@BasePrice * s.PriceMultiplier AS DECIMAL(10,2))
+        FROM Seats s JOIN @Wanted w ON w.SeatNumber = s.SeatNumber
+        WHERE s.FlightID = @FlightID;
+        SELECT @Total = SUM(Price) FROM Tickets WHERE BookingID = @NewBookingID;
+        SET @Reference = 'PAY-' + RIGHT(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', ''), 10);
+        INSERT INTO Payments (BookingID, Amount, Method, Status, Reference, PayerName, AccountMask)
+        VALUES (@NewBookingID, @Total, @PaymentMethod, 'Paid', @Reference, LTRIM(RTRIM(@PayerName)), @AccountMask);
+        COMMIT TRANSACTION;
+        SELECT @NewBookingID AS BookingID,
+               (SELECT STRING_AGG(SeatNumber, ', ') WITHIN GROUP (ORDER BY SeatNumber) FROM @Wanted) AS SeatNumber,
+               @Total AS Price, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference, @AccountMask AS AccountMask;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+-- Full seat map of a flight (free and taken seats) for the plane-style seat picker.
+CREATE OR ALTER PROCEDURE usp_GetSeatMap
+    @FlightID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT s.SeatNumber, s.SeatClass, CAST(f.BasePrice * s.PriceMultiplier AS DECIMAL(10,2)) AS Price,
+           CASE WHEN EXISTS (SELECT 1 FROM Tickets t WHERE t.FlightID = s.FlightID AND t.SeatNumber = s.SeatNumber AND t.Status = 'Active')
+                THEN 1 ELSE 0 END AS IsTaken
+    FROM Seats s
+    JOIN Flights f ON f.FlightID = s.FlightID
+    WHERE s.FlightID = @FlightID;
 END;
 GO
 
@@ -497,15 +624,13 @@ GO
 
 EXEC usp_LoginUser @Email = 'demo@example.com', @Password = N'Demo@12345';
 EXEC usp_GetUpcomingFlights;
+EXEC usp_FindAdjacentSeats @FlightID = 1, @GroupSize = 3;
+EXEC usp_BookGroup @PassengerID = 1, @FlightID = 1, @SeatNumbers = '12A,12B,12C', @PaymentMethod = 'Easypaisa', @PayerName = 'Demo Passenger', @AccountMask = '****4567';
 EXEC usp_GetAvailableSeats @FlightID = 1;
-EXEC usp_BookFlight @PassengerID = 1, @FlightID = 1, @SeatNumber = '5C', @PaymentMethod = 'Easypaisa';
+EXEC usp_GetSeatMap @FlightID = 1;
+EXEC usp_BookFlight @PassengerID = 1, @FlightID = 1, @SeatNumber = '5C', @PaymentMethod = 'Easypaisa', @PayerName = 'Demo Passenger', @AccountMask = '****4567';
 EXEC usp_GetPassengerBookings @PassengerID = 1;
 EXEC usp_CancelBooking @BookingID = 1, @PassengerID = 1;
 SELECT * FROM Payments;
-   USE AirlineWEBDB;
-SELECT COUNT(*) AS Tables FROM sys.tables;
-SELECT COUNT(*) AS Procedures FROM sys.procedures;
-SELECT COUNT(*) AS Flights FROM Flights;
-SELECT COUNT(*) AS Seats FROM Seats;
-SELECT FlightNumber, DepartureTime FROM Flights ORDER BY DepartureTime;
+
    --------------------------------------------------------------------- */

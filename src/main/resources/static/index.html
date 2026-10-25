@@ -7,9 +7,6 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E✈️%3C/text%3E%3C/svg%3E">
 <style>
 :root{--primary:#0e7490;--primary-dark:#164e63;--accent:#f59e0b;--background:#ecfeff;--text:#0f172a;--danger:#dc2626}
-[data-theme="sunset"]{--primary:#c2410c;--primary-dark:#7c2d12;--accent:#eab308;--background:#fff7ed}
-[data-theme="royal"]{--primary:#6d28d9;--primary-dark:#4c1d95;--accent:#f472b6;--background:#f5f3ff}
-[data-theme="forest"]{--primary:#15803d;--primary-dark:#14532d;--accent:#f59e0b;--background:#f0fdf4}
 body{font-family:system-ui,sans-serif;margin:0;background:var(--background);color:var(--text)}
 header{background:linear-gradient(90deg,var(--primary-dark),var(--primary));color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 8px #0003}
 header #logout{background:#ffffff26;border:1px solid #fff6}
@@ -30,8 +27,6 @@ tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
 #seats button.chosen{background:var(--primary);color:#fff;border-color:var(--primary)}
 #message{position:fixed;top:12px;right:12px;padding:10px 16px;border-radius:6px;color:#fff;display:none;box-shadow:0 2px 8px #0004}
 .hidden{display:none}
-.palette{display:flex;align-items:center}
-.swatch{width:22px;height:22px;padding:0;margin:0 3px;border-radius:50%;border:2px solid #fff;cursor:pointer}
 .auth{max-width:380px;margin:40px auto;text-align:center;animation:slideUp .6s ease-out}
 .auth input,.auth button{width:100%;box-sizing:border-box;margin:6px 0;padding:11px 12px}
 .auth input:focus{box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 20%,transparent)}
@@ -48,31 +43,66 @@ tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
 @keyframes fly{0%,100%{transform:translate(-8px,2px) rotate(-6deg)}50%{transform:translate(8px,-6px) rotate(4deg)}}
 @media (prefers-reduced-motion:reduce){.plane,.auth{animation:none}}
-.summary{background:color-mix(in srgb,var(--primary) 8%,white);border-radius:8px;padding:10px 14px;margin:8px 0 14px;font-size:14px}
-.summary b{color:var(--primary-dark)}
-.methods{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
-.method{background:color-mix(in srgb,var(--primary) 10%,white);color:var(--primary-dark);border:1px solid color-mix(in srgb,var(--primary) 35%,white)}
-.method.active{background:var(--primary);color:#fff}
-.f{display:block;font-size:13px;color:#475569;flex:1;min-width:150px}
-.f input,.f select{display:block;width:100%;box-sizing:border-box;margin:4px 0 8px;color:var(--text)}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-.check{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:8px 0}
-.check input{margin:3px 0 0}
-button.secondary{background:#e2e8f0;color:var(--text)}
-button.secondary:hover{background:#cbd5e1}
-button:disabled{opacity:.6;cursor:wait}
-.receipt td:first-child{color:#64748b;width:40%}
+#seats{text-align:center}
+.cabin{display:inline-block;padding:14px 18px;border:2px solid color-mix(in srgb,var(--primary) 30%,white);border-radius:60px 60px 18px 18px;background:#fff}
+.cabin-row{display:flex;align-items:center;justify-content:center;margin:3px 0}
+.row-label{width:26px;font-size:12px;color:#64748b;text-align:right;margin-right:8px}
+.aisle{width:26px}
+#seats button{width:38px;height:34px;padding:0;margin:0 2px}
+#seats button.taken{background:#e2e8f0;color:#94a3b8;border-color:#cbd5e1;cursor:not-allowed}
+#seats button:disabled:not(.taken){opacity:.25;cursor:not-allowed}
+.chips button{background:color-mix(in srgb,var(--primary) 12%,white);color:var(--primary-dark)}
+.chips button.active{background:var(--primary);color:#fff}
+.legend span{display:inline-block;width:14px;height:14px;border-radius:3px;margin:0 4px 0 12px;vertical-align:middle}
+
+/* ===== UI refresh (look only) ===== */
+body{background:radial-gradient(circle at 12% 8%,color-mix(in srgb,var(--primary) 14%,transparent),transparent 42%),radial-gradient(circle at 88% 92%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 40%),var(--background);background-attachment:fixed;min-height:100vh}
+header{position:sticky;top:0;z-index:5}
+.brand{font-size:19px;letter-spacing:.4px}
+.card{border-top:none;position:relative;overflow:hidden;border-radius:16px;padding:22px;transition:transform .2s,box-shadow .2s;box-shadow:0 4px 18px color-mix(in srgb,var(--primary) 14%,transparent)}
+.card::before{content:'';position:absolute;inset:0 0 auto 0;height:5px;background:linear-gradient(90deg,var(--primary),var(--accent))}
+.card:hover{transform:translateY(-2px);box-shadow:0 10px 28px color-mix(in srgb,var(--primary) 22%,transparent)}
+.auth:hover{transform:none}
+h2{letter-spacing:.2px;margin-top:6px}
+#seatTitle::before{content:'\1F4BA  '}
+.hero{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding:26px 30px;border-radius:18px;color:#fff;background:linear-gradient(120deg,var(--primary-dark),var(--primary) 60%,var(--accent));box-shadow:0 10px 30px color-mix(in srgb,var(--primary) 35%,transparent)}
+.hero h1{margin:0 0 4px;font-size:28px}
+.hero p{margin:0;opacity:.92}
+.hero-plane{font-size:54px;animation:fly 4s ease-in-out infinite}
+button{background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 70%,var(--accent)));box-shadow:0 2px 6px color-mix(in srgb,var(--primary) 30%,transparent);transition:transform .15s,box-shadow .15s,filter .15s}
+button:hover{background:linear-gradient(135deg,var(--primary-dark),var(--primary));transform:translateY(-1px);box-shadow:0 5px 12px color-mix(in srgb,var(--primary) 40%,transparent)}
+button.danger{background:linear-gradient(135deg,#dc2626,#f97316)}
+button.tab,button.ghost{box-shadow:none}
+header #logout{background:#ffffff26;box-shadow:none}
+input,select{border-radius:10px;padding:10px 14px;background:#fff}
+input:focus,select:focus{box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 18%,transparent)}
+table{border-collapse:separate;border-spacing:0;margin-top:10px;border:1px solid color-mix(in srgb,var(--primary) 15%,white);border-radius:12px;overflow:hidden}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--primary) 3%,white)}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700}
+.badge.Confirmed{background:#dcfce7;color:#166534}
+.badge.Cancelled{background:#fee2e2;color:#991b1b}
+.seats-left{display:inline-block;padding:2px 11px;border-radius:999px;font-weight:700;background:#dcfce7;color:#166534}
+.seats-left.low{background:#fee2e2;color:#991b1b}
+.cabin{background:linear-gradient(180deg,color-mix(in srgb,var(--primary) 6%,white),#fff 25%);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary) 12%,transparent)}
+.cabin::before{content:'FRONT OF CABIN';display:block;font-size:11px;letter-spacing:3px;color:#94a3b8;margin-bottom:10px}
+#seats button{border-radius:10px 10px 5px 5px;box-shadow:0 3px 0 color-mix(in srgb,var(--primary) 30%,transparent)}
+#seats button:not(:disabled):hover{transform:translateY(-3px)}
+#seats button.chosen{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 65%,transparent)}
+#seats button.taken{box-shadow:none}
+.chips button{border-radius:999px;box-shadow:none}
+#paymentCard::before{background:linear-gradient(90deg,#16a34a,#22c55e)}
+#message{animation:toastIn .3s ease-out;border-radius:12px;font-weight:600}
+.footer{text-align:center;color:#64748b;font-size:13px;padding:6px 0 28px}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
+@media (max-width:640px){main{padding:0 10px}.hero{padding:18px}.hero h1{font-size:21px}.hero-plane{font-size:38px}table{display:block;overflow-x:auto}th,td{padding:6px 5px;font-size:12px}}
+@media (prefers-reduced-motion:reduce){.hero-plane,#message{animation:none}.card,button{transition:none}}
 </style>
 </head>
 <body>
 <header>
-  <strong>Airline Reservation</strong>
-  <span class="palette">
-    <button class="swatch" style="background:#0e7490" title="Teal" onclick="setTheme('teal')"></button>
-    <button class="swatch" style="background:#c2410c" title="Sunset" onclick="setTheme('sunset')"></button>
-    <button class="swatch" style="background:#6d28d9" title="Royal" onclick="setTheme('royal')"></button>
-    <button class="swatch" style="background:#15803d" title="Forest" onclick="setTheme('forest')"></button>
-  </span>
+  <strong class="brand">✈ Airline Reservation</strong>
   <span><span id="who"></span> <button id="logout" class="hidden" onclick="logout()">Logout</button></span>
 </header>
 <div id="message"></div>
@@ -97,8 +127,12 @@ button:disabled{opacity:.6;cursor:wait}
     <button id="registerButton" class="hidden" onclick="registerAccount()">Create account</button>
   </section>
   <div id="appSection" class="hidden">
+    <div class="hero">
+      <div><h1>Where to next?</h1><p>Search a route, pick your seats, pay and fly. Seats update live.</p></div>
+      <span class="hero-plane">&#9992;</span>
+    </div>
     <section class="card">
-      <h2>Search flights</h2>
+      <h2>🔎 Search flights</h2>
       <select id="origin"></select>
       <select id="destination"></select>
       <input id="travelDate" type="date">
@@ -106,77 +140,51 @@ button:disabled{opacity:.6;cursor:wait}
       <table><tbody id="results"></tbody></table>
     </section>
     <section class="card">
-      <h2>Upcoming flights</h2>
+      <h2>🛫 Upcoming flights</h2>
       <table><tbody id="upcoming"></tbody></table>
     </section>
     <section id="seatCard" class="card hidden">
       <h2 id="seatTitle">Choose your seat</h2>
-      <p>Yellow seats are Business class. Hover a seat to see its price.</p>
-      <p>Travelling together? <input id="groupSize" type="number" min="2" max="6" value="4" style="width:70px"> <button onclick="findGroupSeats()">Find seats together</button></p>
+      <div class="chips">
+        <button id="filter-all" class="active" onclick="setSeatFilter('all')">All seats</button>
+        <button id="filter-window" onclick="setSeatFilter('window')">Window</button>
+        <button id="filter-aisle" onclick="setSeatFilter('aisle')">Aisle</button>
+        <button id="filter-middle" onclick="setSeatFilter('middle')">Middle</button>
+      </div>
+      <p class="legend"><small>Window = A and F, aisle = C and D, middle = B and E. Hover a seat for its price.</small><br>
+        <span style="background:#e2e8f0"></span>Taken <span style="background:#fef3c7;border:1px solid #f59e0b"></span>Business <span style="background:var(--primary)"></span>Your choice</p>
+      <p><small>Booking for a family? Click several seats to select them (up to 6), or let us suggest seats together. Click a selected seat again to remove it.</small></p>
+      <p>Travelling together? <input id="groupSize" type="number" min="2" max="6" value="4" style="width:70px">
+        <select id="groupClass"><option value="Economy">Economy</option><option value="Business">Business</option><option value="Any">Any class</option></select>
+        <button onclick="findGroupSeats()">Find seats together</button></p>
       <div id="groupOptions"></div>
       <div id="seats"></div>
       <p id="selection"></p>
-      <button onclick="goToPayment()">Continue to payment</button>
+      <button onclick="openPayment()">Continue to payment</button>
     </section>
-    <section id="paymentSection" class="card hidden">
-      <h2>Payment</h2>
-      <div class="summary" id="orderSummary"></div>
-      <div class="methods">
-        <button class="method active" data-method="Card" onclick="showMethod('Card')">Card</button>
-        <button class="method" data-method="JazzCash" onclick="showMethod('JazzCash')">JazzCash</button>
-        <button class="method" data-method="Easypaisa" onclick="showMethod('Easypaisa')">Easypaisa</button>
-        <button class="method" data-method="Bank Transfer" onclick="showMethod('Bank Transfer')">Bank transfer</button>
-      </div>
-      <div id="cardFields">
-        <label class="f">Name on card<input id="cardName" autocomplete="cc-name"></label>
-        <label class="f">Card number<input id="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" oninput="formatCard(this)"></label>
-        <div class="row">
-          <label class="f">Expiry (MM/YY)<input id="cardExpiry" inputmode="numeric" autocomplete="cc-exp" placeholder="08/29" oninput="formatExpiry(this)"></label>
-          <label class="f">CVV<input id="cardCvv" type="password" inputmode="numeric" maxlength="4" autocomplete="cc-csc"></label>
-        </div>
-        <label class="f">Billing address<input id="billAddress" autocomplete="street-address"></label>
-        <div class="row">
-          <label class="f">City<input id="billCity" autocomplete="address-level2"></label>
-          <label class="f">Postal code<input id="billPostal" autocomplete="postal-code"></label>
-          <label class="f">Country<select id="billCountry"><option>Pakistan</option><option>Other</option></select></label>
-        </div>
-      </div>
-      <div id="walletFields" class="hidden">
-        <label class="f">Account holder name<input id="walletName"></label>
-        <div class="row">
-          <label class="f"><span id="walletLabel">Wallet</span> mobile number<input id="walletMobile" inputmode="tel" placeholder="0300-1234567"></label>
-          <label class="f">MPIN (4 or 5 digits)<input id="walletPin" type="password" inputmode="numeric" maxlength="5"></label>
-        </div>
-      </div>
-      <div id="bankFields" class="hidden">
-        <label class="f">Your bank<select id="bankName"><option value="">Select a bank</option><option>HBL</option><option>UBL</option><option>MCB</option><option>Meezan Bank</option><option>Allied Bank</option><option>Bank Alfalah</option><option>Standard Chartered</option><option>Other</option></select></label>
-        <label class="f">Account title<input id="bankTitle"></label>
-        <label class="f">IBAN or account number<input id="bankAccount" placeholder="PK36SCBL0000001123456702"></label>
-        <label class="f">Transaction reference from your bank<input id="bankRef"></label>
-      </div>
-      <label class="f">Email for the receipt<input id="receiptEmail" type="email" autocomplete="email"></label>
-      <label class="check"><input type="checkbox" id="agree"><span>I accept the fare rules and refund policy (100% refund more than 48 hours before departure, 50% from 24 to 48 hours, none after that).</span></label>
-      <p><small>Demo payment only. No real money is charged. Card numbers, CVV and PINs are checked in your browser and never sent or stored. Only the last digits are saved.</small></p>
-      <button class="secondary" onclick="backToSeats()">Back to seats</button>
-      <button id="payButton" onclick="payNow()">Pay now</button>
-    </section>
-    <section id="receiptCard" class="card hidden">
-      <h2>Payment received</h2>
-      <table class="receipt"><tbody id="receiptBody"></tbody></table>
-      <button onclick="byId('receiptCard').classList.add('hidden')">Close</button>
+    <section id="paymentCard" class="card hidden">
+      <h2>🔒 Payment details</h2>
+      <p id="paymentSummary"></p>
+      <label>Pay with: <select id="paymentMethod" onchange="showPaymentHint()"><option>Card</option><option>JazzCash</option><option>Easypaisa</option><option>Bank Transfer</option></select></label><br>
+      <input id="payerName" placeholder="Name on the account">
+      <input id="accountNumber" inputmode="numeric" placeholder="Card / account / mobile number">
+      <p><small id="paymentHint"></small></p>
+      <p><small>Demo payment only. No real money is charged. The full number stays in your browser; only the last 4 digits are saved.</small></p>
+      <button onclick="confirmBooking()">Pay now</button>
+      <button onclick="closePayment()">Back</button>
     </section>
     <section class="card">
-      <h2>My bookings</h2>
+      <h2>🎟 My bookings</h2>
       <table><tbody id="bookings"></tbody></table>
     </section>
   </div>
 </main>
+<div class="footer">Demo project &middot; payments are simulated &middot; only the last 4 digits are saved</div>
 <script>
 let selectedFlightId = null;
 let selectedSeat = null;
-let selectedPrice = 0;
-let selectedFlightNumber = '';
-let payMethod = 'Card';
+let seatFilter = 'all';
+let cabinSeats = [];
 const byId = id => document.getElementById(id);
 const showTime = text => String(text).replace('T', ' ');
 function notify(text, isError) {
@@ -202,8 +210,8 @@ function showUser(user) {
   byId('appSection').classList.toggle('hidden', !loggedIn);
   byId('logout').classList.toggle('hidden', !loggedIn);
   byId('who').textContent = loggedIn ? (user.FullName || user.Email) : '';
-  if (loggedIn) { loadAirports(); loadBookings(); byId('receiptEmail').value = user.Email || ''; }
-  else { ['seatCard', 'paymentSection', 'receiptCard'].forEach(id => byId(id).classList.add('hidden')); clearPayment(); byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); }
+  if (loggedIn) { loadAirports(); loadBookings(); }
+  else { byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); }
 }
 const login = () => run(async () => {
   showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
@@ -229,7 +237,7 @@ const searchFlights = () => run(async () => {
   byId('results').innerHTML = flights.length === 0 ? '<tr><td>No flights found for this route and date.</td></tr>'
     : '<tr><th>Flight</th><th>Departs</th><th>Arrives</th><th>From PKR</th><th>Free seats</th><th></th></tr>' +
       flights.map(f => `<tr><td>${f.FlightNumber}</td><td>${showTime(f.DepartureTime)}</td><td>${showTime(f.ArrivalTime)}</td>
-        <td>${f.BasePrice}</td><td>${f.AvailableSeats}</td>
+        <td>${f.BasePrice}</td><td><span class="seats-left ${f.AvailableSeats < 20 ? 'low' : ''}">${f.AvailableSeats}</span></td>
         <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
 });
 const loadUpcoming = () => run(async () => {
@@ -237,126 +245,101 @@ const loadUpcoming = () => run(async () => {
   byId('upcoming').innerHTML = flights.length === 0 ? '<tr><td>No upcoming flights.</td></tr>'
     : '<tr><th>Flight</th><th>Route</th><th>Departs</th><th>From PKR</th><th>Free seats</th><th></th></tr>' +
       flights.map(f => `<tr><td>${f.FlightNumber}</td><td>${f.OriginCode} to ${f.DestinationCode}</td><td>${showTime(f.DepartureTime)}</td>
-        <td>${f.BasePrice}</td><td>${f.AvailableSeats}</td>
+        <td>${f.BasePrice}</td><td><span class="seats-left ${f.AvailableSeats < 20 ? 'low' : ''}">${f.AvailableSeats}</span></td>
         <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
 });
 const chooseSeat = (flightId, flightNumber) => run(async () => {
   selectedFlightId = flightId;
-  selectedFlightNumber = flightNumber;
   selectedSeat = null;
-  byId('paymentSection').classList.add('hidden');
   byId('selection').textContent = '';
+  byId('groupOptions').innerHTML = '';
+  setSeatFilter('all', false);
   byId('seatTitle').textContent = 'Choose your seat on ' + flightNumber;
-  const seats = await api(`/flights/${flightId}/seats`);
-  byId('seats').innerHTML = seats.map(s =>
-    `<button class="${s.SeatClass === 'Business' ? 'business' : ''}" title="PKR ${s.Price}"
-      onclick="selectSeat(this, '${s.SeatNumber}', ${s.Price})">${s.SeatNumber}</button>`).join('');
+  cabinSeats = await api(`/flights/${flightId}/seat-map`);
+  renderCabin();
   byId('seatCard').classList.remove('hidden');
   byId('seatCard').scrollIntoView({behavior: 'smooth'});
 });
-function selectSeat(button, seatNumber, price) {
-  document.querySelectorAll('#seats button').forEach(b => b.classList.remove('chosen'));
-  button.classList.add('chosen');
-  selectedSeat = seatNumber;
-  selectedPrice = price;
-  byId('selection').textContent = `Seat ${seatNumber} - PKR ${price}`;
+const seatType = letter => 'AF'.includes(letter) ? 'window' : 'CD'.includes(letter) ? 'aisle' : 'middle';
+function renderCabin() {
+  const chosenSeats = String(selectedSeat ?? '').split(',');
+  const rows = {};
+  cabinSeats.forEach(s => (rows[parseInt(s.SeatNumber)] ??= []).push(s));
+  byId('seats').innerHTML = '<div class="cabin">' + Object.keys(rows).map(rowNumber => {
+    const buttons = rows[rowNumber].sort((a, b) => a.SeatNumber.localeCompare(b.SeatNumber)).map(s => {
+      const letter = s.SeatNumber.slice(-1);
+      const type = seatType(letter);
+      const filteredOut = seatFilter !== 'all' && type !== seatFilter;
+      const classes = [s.SeatClass === 'Business' ? 'business' : '', s.IsTaken ? 'taken' : '', chosenSeats.includes(s.SeatNumber) ? 'chosen' : ''].join(' ');
+      return `<button class="${classes}" ${s.IsTaken || (filteredOut && !chosenSeats.includes(s.SeatNumber)) ? 'disabled' : ''} title="${s.SeatNumber} - ${type} - PKR ${s.Price}"
+        onclick="selectSeat('${s.SeatNumber}')">${letter}</button>${letter === 'C' ? '<span class="aisle"></span>' : ''}`;
+    }).join('');
+    return `<div class="cabin-row"><span class="row-label">${rowNumber}</span>${buttons}</div>`;
+  }).join('') + '</div>';
 }
-const digits = text => String(text).replace(/\D/g, '');
-function luhnOk(number) {
-  let sum = 0, double = false;
-  for (let i = number.length - 1; i >= 0; i--) {
-    let d = Number(number[i]);
-    if (double) { d *= 2; if (d > 9) d -= 9; }
-    sum += d; double = !double;
-  }
-  return sum % 10 === 0;
+function setSeatFilter(filterName, redraw = true) {
+  seatFilter = filterName;
+  ['all', 'window', 'aisle', 'middle'].forEach(name => byId('filter-' + name).classList.toggle('active', name === filterName));
+  if (redraw) renderCabin();
 }
-function formatCard(box) { box.value = digits(box.value).slice(0, 19).replace(/(.{4})/g, '$1 ').trim(); }
-function formatExpiry(box) {
-  const d = digits(box.value).slice(0, 4);
-  box.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+function selectSeat(seatNumber) {
+  const chosen = selectedSeat ? selectedSeat.split(',') : [];
+  const position = chosen.indexOf(seatNumber);
+  if (position >= 0) chosen.splice(position, 1);
+  else if (chosen.length >= 6) { notify('You can book up to 6 seats together.', true); return; }
+  else chosen.push(seatNumber);
+  setChosenSeats(chosen);
 }
-function showMethod(method) {
-  payMethod = method;
-  const wallet = method === 'JazzCash' || method === 'Easypaisa';
-  byId('cardFields').classList.toggle('hidden', method !== 'Card');
-  byId('walletFields').classList.toggle('hidden', !wallet);
-  byId('bankFields').classList.toggle('hidden', method !== 'Bank Transfer');
-  byId('walletLabel').textContent = method;
-  document.querySelectorAll('.method').forEach(b => b.classList.toggle('active', b.dataset.method === method));
+function setChosenSeats(chosen) {
+  selectedSeat = chosen.length ? chosen.join(',') : null;
+  renderCabin();
+  const total = cabinSeats.filter(s => chosen.includes(s.SeatNumber)).reduce((sum, s) => sum + Number(s.Price), 0);
+  byId('selection').textContent = chosen.length ? `${chosen.length === 1 ? 'Seat' : 'Seats'} ${chosen.join(', ')} - PKR ${total}` : '';
 }
-function clearPayment() {
-  ['cardName', 'cardNumber', 'cardExpiry', 'cardCvv', 'billAddress', 'billCity', 'billPostal',
-   'walletName', 'walletMobile', 'walletPin', 'bankTitle', 'bankAccount', 'bankRef'].forEach(id => byId(id).value = '');
-  byId('bankName').value = '';
-  byId('agree').checked = false;
+const findGroupSeats = () => run(async () => {
+  const options = await api(`/flights/${selectedFlightId}/group-seats?size=${byId('groupSize').value}&seatClass=${byId('groupClass').value}`);
+  byId('groupOptions').innerHTML = options.length === 0 ? '<p>No seats together for that group size. Try a smaller group.</p>'
+    : options.map(o => `<button onclick="pickGroup('${o.Seats}', ${o.TotalPrice})">${o.Seats.replaceAll(',', ', ')} - PKR ${o.TotalPrice}${o.CrossesAisle ? ' (across the aisle)' : ''}</button>`).join('');
+});
+function pickGroup(seatList) {
+  setChosenSeats(seatList.split(','));
 }
-const goToPayment = () => run(async () => {
+const paymentRules = {
+  'Card': {length: 16, hint: 'Enter your 16-digit card number.'},
+  'JazzCash': {length: 11, hint: 'Enter your 11-digit mobile number (03XXXXXXXXX).'},
+  'Easypaisa': {length: 11, hint: 'Enter your 11-digit mobile number (03XXXXXXXXX).'},
+  'Bank Transfer': {length: 0, hint: 'Enter your account number (8 to 24 digits).'}
+};
+function showPaymentHint() {
+  byId('paymentHint').textContent = paymentRules[byId('paymentMethod').value].hint;
+}
+function openPayment() {
+  if (!selectedSeat) { notify('Please click a seat first.', true); return; }
+  byId('paymentSummary').textContent = byId('selection').textContent;
+  showPaymentHint();
+  byId('paymentCard').classList.remove('hidden');
+  byId('paymentCard').scrollIntoView({behavior: 'smooth'});
+}
+function closePayment() {
+  byId('paymentCard').classList.add('hidden');
+}
+const confirmBooking = () => run(async () => {
   if (!selectedSeat) throw new Error('Please click a seat first.');
-  byId('orderSummary').innerHTML = `Flight <b>${selectedFlightNumber}</b> &middot; Seat <b>${selectedSeat}</b><br>Total to pay: <b>PKR ${Number(selectedPrice).toLocaleString()}</b>`;
-  byId('payButton').textContent = `Pay PKR ${Number(selectedPrice).toLocaleString()}`;
+  const method = byId('paymentMethod').value;
+  const rule = paymentRules[method];
+  const payerName = byId('payerName').value.trim();
+  const digits = byId('accountNumber').value.replace(/[\s-]/g, '');
+  if (payerName.length < 2) throw new Error('Please enter the name on the account.');
+  const validLength = rule.length ? digits.length === rule.length : digits.length >= 8 && digits.length <= 24;
+  if (!/^\d+$/.test(digits) || !validLength) throw new Error(rule.hint);
+  const ticket = await api(selectedSeat.includes(',') ? '/bookings/group' : '/bookings', 'POST', {flightId: String(selectedFlightId),
+    seatNumber: selectedSeat, seatNumbers: selectedSeat, paymentMethod: method, payerName: payerName, accountMask: '****' + digits.slice(-4)});
+  byId('accountNumber').value = '';
+  notify(`Paid PKR ${ticket.Price} by ${ticket.PaymentMethod} (${ticket.AccountMask}). Ref: ${ticket.PaymentReference}`);
+  byId('paymentCard').classList.add('hidden');
   byId('seatCard').classList.add('hidden');
-  byId('paymentSection').classList.remove('hidden');
-  byId('paymentSection').scrollIntoView({behavior: 'smooth'});
-});
-function backToSeats() {
-  byId('paymentSection').classList.add('hidden');
-  byId('seatCard').classList.remove('hidden');
-  byId('seatCard').scrollIntoView({behavior: 'smooth'});
-}
-function collectPayment() {
-  const need = (ok, message) => { if (!ok) throw new Error(message); };
-  const email = byId('receiptEmail').value.trim();
-  need(/^\S+@\S+\.\S+$/.test(email), 'Enter a valid email for the receipt.');
-  let payerName, accountMask;
-  if (payMethod === 'Card') {
-    payerName = byId('cardName').value.trim();
-    need(payerName.length >= 3, 'Enter the name on the card.');
-    const number = digits(byId('cardNumber').value);
-    need(number.length === 16, 'The card number must be 16 digits.');
-    need(digits(byId('cardExpiry').value).length === 4, 'Enter the expiry date as MM/YY (4 digits).');
-    need(/^\d{3,4}$/.test(byId('cardCvv').value), 'The CVV must be 3 or 4 digits.');
-    need(byId('billAddress').value.trim().length >= 5 && byId('billCity').value.trim() && byId('billPostal').value.trim(),
-      'Enter your full billing address, city and postal code.');
-    accountMask = '**** ' + number.slice(-4);
-  } else if (payMethod === 'Bank Transfer') {
-    need(byId('bankName').value, 'Select your bank.');
-    payerName = byId('bankTitle').value.trim();
-    need(payerName.length >= 3, 'Enter the account title.');
-    const account = byId('bankAccount').value.replace(/\s/g, '').toUpperCase();
-    need(/^PK\d{2}[A-Z]{4}\d{16}$/.test(account) || /^\d{8,20}$/.test(account), 'Enter a valid IBAN (PK + 22 characters) or account number.');
-    need(byId('bankRef').value.trim().length >= 6, 'Enter the transaction reference from your bank.');
-    accountMask = '**** ' + account.slice(-4);
-  } else {
-    payerName = byId('walletName').value.trim();
-    need(payerName.length >= 3, 'Enter the account holder name.');
-    const mobile = digits(byId('walletMobile').value);
-    need(/^03\d{9}$/.test(mobile), 'Enter a mobile number like 0300-1234567.');
-    need(/^\d{4,5}$/.test(byId('walletPin').value), 'Enter your 4 or 5 digit MPIN.');
-    accountMask = mobile.slice(0, 4) + '***' + mobile.slice(-3);
-  }
-  need(byId('agree').checked, 'Please accept the fare rules and refund policy.');
-  return {payerName, accountMask, email};
-}
-const payNow = () => run(async () => {
-  const payment = collectPayment();
-  byId('payButton').disabled = true;
-  try {
-    const ticket = await api('/bookings', 'POST', {flightId: String(selectedFlightId), seatNumber: selectedSeat,
-      paymentMethod: payMethod, payerName: payment.payerName, accountMask: payment.accountMask});
-    byId('receiptBody').innerHTML =
-      `<tr><td>Reference</td><td>${ticket.PaymentReference}</td></tr><tr><td>Flight</td><td>${selectedFlightNumber}</td></tr>` +
-      `<tr><td>Seat</td><td>${ticket.SeatNumber}</td></tr><tr><td>Amount paid</td><td>PKR ${Number(ticket.Price).toLocaleString()}</td></tr>` +
-      `<tr><td>Method</td><td>${ticket.PaymentMethod} ${ticket.AccountMask ?? ''}</td></tr><tr><td>Receipt sent to</td><td>${payment.email}</td></tr>`;
-    clearPayment();
-    byId('paymentSection').classList.add('hidden');
-    byId('receiptCard').classList.remove('hidden');
-    byId('receiptCard').scrollIntoView({behavior: 'smooth'});
-    loadBookings();
-    searchFlights();
-  } finally {
-    byId('payButton').disabled = false;
-  }
+  loadBookings();
+  searchFlights();
 });
 const loadBookings = () => run(async () => {
   const bookings = await api('/bookings/mine');
@@ -364,8 +347,8 @@ const loadBookings = () => run(async () => {
   byId('bookings').innerHTML = bookings.length === 0 ? '<tr><td>No bookings yet.</td></tr>'
     : '<tr><th>#</th><th>Flight</th><th>Route</th><th>Departs</th><th>Seat</th><th>Price</th><th>Status</th><th>Payment</th><th>Refund</th><th></th></tr>' +
       bookings.map(b => `<tr><td>${b.BookingID}</td><td>${b.FlightNumber}</td><td>${b.OriginCode} to ${b.DestinationCode}</td>
-        <td>${showTime(b.DepartureTime)}</td><td>${b.SeatNumber}</td><td>${b.Price}</td><td>${b.BookingStatus}</td>
-        <td>${b.PaymentMethod ? b.PaymentMethod + ' ' + (b.AccountMask ?? '') : '-'}</td><td>${b.RefundAmount ?? ''}</td>
+        <td>${showTime(b.DepartureTime)}</td><td>${b.SeatNumber}</td><td>${b.Price}</td><td><span class="badge ${b.BookingStatus}">${b.BookingStatus}</span></td>
+        <td>${b.PaymentMethod ?? '-'}</td><td>${b.RefundAmount ?? ''}</td>
         <td>${b.BookingStatus === 'Confirmed' ? `<button class="danger" onclick="cancelBooking(${b.BookingID}, ${b.ExpectedRefund ?? 0})">Cancel</button>` : ''}</td></tr>`).join('');
 });
 const cancelBooking = (bookingId, expectedRefund) => run(async () => {
@@ -374,16 +357,6 @@ const cancelBooking = (bookingId, expectedRefund) => run(async () => {
   notify(`Booking cancelled. Refund: PKR ${result.RefundAmount}`);
   loadBookings();
 });
-const findGroupSeats = () => run(async () => {
-  const options = await api(`/flights/${selectedFlightId}/group-seats?size=${byId('groupSize').value}`);
-  byId('groupOptions').innerHTML = options.length === 0 ? '<p>No seats together for that group size. Try a smaller group.</p>'
-    : options.map(o => `<button onclick="pickGroup('${o.Seats}', ${o.TotalPrice})">${o.Seats.replaceAll(',', ', ')} - PKR ${o.TotalPrice}${o.CrossesAisle ? ' (across the aisle)' : ''}</button>`).join('');
-});
-function pickGroup(seatList, totalPrice) {
-  document.querySelectorAll('#seats button').forEach(b => b.classList.toggle('chosen', seatList.split(',').includes(b.textContent)));
-  selectedSeat = seatList;
-  byId('selection').textContent = `Group seats ${seatList.replaceAll(',', ', ')} - PKR ${totalPrice}`;
-}
 function showTab(tabName) {
   const registering = tabName === 'register';
   byId('confirmPassword').classList.toggle('hidden', !registering);
@@ -400,13 +373,7 @@ function togglePassword() {
   byId('confirmPassword').type = newType;
   byId('showPassword').textContent = showing ? 'Show' : 'Hide';
 }
-function setTheme(themeName) {
-  document.documentElement.dataset.theme = themeName;
-  try { localStorage.setItem('theme', themeName); } catch (error) {}
-}
-let savedTheme = 'teal';
-try { savedTheme = localStorage.getItem('theme') || 'teal'; } catch (error) {}
-setTheme(savedTheme);
+try { localStorage.removeItem('theme'); } catch (error) {}
 byId('travelDate').valueAsDate = new Date(Date.now() + 8 * 86400000);
 api('/me').then(showUser).catch(() => showUser(null));
 </script>

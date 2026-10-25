@@ -1,14 +1,3 @@
-/* =====================================================================
-   AirlineWEBDB - Airline Reservation System (SQL Server / T-SQL)
-
-   RUN THIS WHOLE FILE ONCE in SQL Server Management Studio (press F5).
-
-   WARNING: it DROPS and RECREATES the AirlineWEBDB database, so every
-   run starts clean. Remove PART 0 once you keep real data.
-
-   Parts: 0 Reset | 1 Tables | 2 Procedures | 3 Sample data | 4 App login | 5 Tests
-   ===================================================================== */
-
 /* ---------------- PART 0 - Reset database ---------------- */
 USE master;
 GO
@@ -441,7 +430,8 @@ GO
 -- Blocks that do not cross the aisle (between seats C and D) come first, then the front rows.
 CREATE OR ALTER PROCEDURE usp_FindAdjacentSeats
     @FlightID INT,
-    @GroupSize INT
+    @GroupSize INT,
+    @SeatClass VARCHAR(20) = 'Any'
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -459,7 +449,8 @@ BEGIN
            s.SeatNumber, CAST(@BasePrice * s.PriceMultiplier AS DECIMAL(10,2))
     FROM Seats s
     LEFT JOIN Tickets t ON t.FlightID = s.FlightID AND t.SeatNumber = s.SeatNumber AND t.Status = 'Active'
-    WHERE s.FlightID = @FlightID AND t.TicketID IS NULL;
+    WHERE s.FlightID = @FlightID AND t.TicketID IS NULL
+      AND (@SeatClass = 'Any' OR s.SeatClass = @SeatClass);
     SELECT TOP (3) a.RowNo,
            CASE WHEN a.Col <= 3 AND a.Col + @GroupSize - 1 >= 4 THEN 1 ELSE 0 END AS CrossesAisle,
            STRING_AGG(b.SeatNumber, ',') WITHIN GROUP (ORDER BY b.Col) AS Seats,
@@ -471,7 +462,8 @@ BEGIN
     ORDER BY CASE WHEN a.Col <= 3 AND a.Col + @GroupSize - 1 >= 4 THEN 1 ELSE 0 END, a.RowNo, a.Col;
 END;
 GO
--- Group booking: 2 to 6 neighbouring seats, one booking, one payment. All seats or none.
+-- Group booking: 2 to 6 seats chosen by the passenger (the finder suggests neighbouring ones),
+-- one booking, one payment. All seats or none.
 CREATE OR ALTER PROCEDURE usp_BookGroup
     @PassengerID INT,
     @FlightID INT,
@@ -499,9 +491,6 @@ BEGIN
             THROW 50049, 'Please enter a valid card, account or mobile number.', 1;
         IF @SeatCount < 2 OR @SeatCount > 6
             THROW 50047, 'A group booking needs 2 to 6 seats.', 1;
-        IF (SELECT COUNT(DISTINCT CAST(LEFT(SeatNumber, LEN(SeatNumber) - 1) AS INT)) FROM @Wanted) <> 1
-           OR (SELECT MAX(ASCII(RIGHT(SeatNumber, 1))) - MIN(ASCII(RIGHT(SeatNumber, 1))) FROM @Wanted) <> @SeatCount - 1
-            THROW 50048, 'Group seats must be next to each other in the same row.', 1;
         SELECT @DepartureTime = DepartureTime, @FlightStatus = Status, @BasePrice = BasePrice
         FROM Flights WHERE FlightID = @FlightID;
         IF @FlightStatus IS NULL
@@ -619,18 +608,3 @@ BEGIN
     GRANT SELECT ON Airports TO airline_app;
 END
 GO
-
-/* ---------------- PART 5 - Test examples (select a line and press F5) ----------------
-
-EXEC usp_LoginUser @Email = 'demo@example.com', @Password = N'Demo@12345';
-EXEC usp_GetUpcomingFlights;
-EXEC usp_FindAdjacentSeats @FlightID = 1, @GroupSize = 3;
-EXEC usp_BookGroup @PassengerID = 1, @FlightID = 1, @SeatNumbers = '12A,12B,12C', @PaymentMethod = 'Easypaisa', @PayerName = 'Demo Passenger', @AccountMask = '****4567';
-EXEC usp_GetAvailableSeats @FlightID = 1;
-EXEC usp_GetSeatMap @FlightID = 1;
-EXEC usp_BookFlight @PassengerID = 1, @FlightID = 1, @SeatNumber = '5C', @PaymentMethod = 'Easypaisa', @PayerName = 'Demo Passenger', @AccountMask = '****4567';
-EXEC usp_GetPassengerBookings @PassengerID = 1;
-EXEC usp_CancelBooking @BookingID = 1, @PassengerID = 1;
-SELECT * FROM Payments;
-
-   --------------------------------------------------------------------- */

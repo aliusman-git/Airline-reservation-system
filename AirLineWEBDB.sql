@@ -1,3 +1,14 @@
+/* =====================================================================
+   AirlineWEBDB - Airline Reservation System (SQL Server / T-SQL)
+
+   RUN THIS WHOLE FILE ONCE in SQL Server Management Studio (press F5).
+
+   WARNING: it DROPS and RECREATES the AirlineWEBDB database, so every
+   run starts clean. Remove PART 0 once you keep real data.
+
+   Parts: 0 Reset | 1 Tables | 2 Procedures | 3 Sample data | 4 App login | 5 Tests
+   ===================================================================== */
+
 /* ---------------- PART 0 - Reset database ---------------- */
 USE master;
 GO
@@ -207,6 +218,11 @@ BEGIN
     SET @Email = LOWER(LTRIM(RTRIM(@Email)));
     IF LEN(@Password) < 8
         THROW 50020, 'Password must be at least 8 characters.', 1;
+    IF @Password NOT LIKE '%[A-Z]%' COLLATE Latin1_General_BIN
+       OR @Password NOT LIKE '%[a-z]%' COLLATE Latin1_General_BIN
+       OR @Password NOT LIKE '%[0-9]%'
+       OR @Password NOT LIKE '%[^A-Za-z0-9]%' COLLATE Latin1_General_BIN
+        THROW 50022, 'Password needs an uppercase letter, a lowercase letter, a number and a special character.', 1;
     IF EXISTS (SELECT 1 FROM Users WHERE Email = @Email) OR EXISTS (SELECT 1 FROM Passengers WHERE Email = @Email)
         THROW 50021, 'This email is already registered.', 1;
     DECLARE @Salt VARBINARY(16) = CRYPT_GEN_RANDOM(16);
@@ -608,3 +624,18 @@ BEGIN
     GRANT SELECT ON Airports TO airline_app;
 END
 GO
+
+/* ---------------- PART 5 - Test examples (select a line and press F5) ----------------
+
+EXEC usp_LoginUser @Email = 'demo@example.com', @Password = N'Demo@12345';
+EXEC usp_GetUpcomingFlights;
+EXEC usp_FindAdjacentSeats @FlightID = 1, @GroupSize = 3, @SeatClass = 'Economy';
+EXEC usp_BookGroup @PassengerID = 1, @FlightID = 1, @SeatNumbers = '12A,12B,12C', @PaymentMethod = 'Easypaisa', @PayerName = 'Demo Passenger', @AccountMask = '****4567';
+EXEC usp_GetAvailableSeats @FlightID = 1;
+EXEC usp_GetSeatMap @FlightID = 1;
+EXEC usp_BookFlight @PassengerID = 1, @FlightID = 1, @SeatNumber = '5C', @PaymentMethod = 'Easypaisa', @PayerName = 'Demo Passenger', @AccountMask = '****4567';
+EXEC usp_GetPassengerBookings @PassengerID = 1;
+EXEC usp_CancelBooking @BookingID = 1, @PassengerID = 1;
+SELECT * FROM Payments;
+
+   --------------------------------------------------------------------- */

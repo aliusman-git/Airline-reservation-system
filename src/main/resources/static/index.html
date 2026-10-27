@@ -98,6 +98,35 @@ tr:last-child td{border-bottom:none}
 @keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
 @media (max-width:640px){main{padding:0 10px}.hero{padding:18px}.hero h1{font-size:21px}.hero-plane{font-size:38px}table{display:block;overflow-x:auto}th,td{padding:6px 5px;font-size:12px}}
 @media (prefers-reduced-motion:reduce){.hero-plane,#message{animation:none}.card,button{transition:none}}
+
+/* ===== Round 1: tabs, payment form, password rules ===== */
+.mainnav{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.navtab{background:#fff;color:var(--primary-dark);border-radius:999px;padding:11px 22px;font-weight:600;box-shadow:0 2px 8px color-mix(in srgb,var(--primary) 15%,transparent)}
+.navtab:hover{background:color-mix(in srgb,var(--primary) 10%,white);color:var(--primary-dark)}
+.navtab.active{background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 70%,var(--accent)));color:#fff}
+.navtab.active:hover{background:var(--primary-dark);color:#fff}
+.summary{background:color-mix(in srgb,var(--primary) 10%,white);padding:12px 16px;border-radius:12px;margin:8px 0 12px;line-height:1.6}
+.methods{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
+.method{background:color-mix(in srgb,var(--primary) 10%,white);color:var(--primary-dark);box-shadow:none}
+.method:hover{background:color-mix(in srgb,var(--primary) 20%,white);color:var(--primary-dark)}
+.method.active,.method.active:hover{background:var(--primary);color:#fff}
+.field{display:block;margin:10px 0;font-size:13px;color:#475569}
+.field input,.field select{display:block;width:100%;box-sizing:border-box;margin:4px 0 0}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row .field{flex:1;min-width:140px}
+.check{display:flex;gap:8px;align-items:flex-start;margin:14px 0;font-size:13px;color:#334155}
+.check input{margin-top:3px}
+.note{font-size:12px;color:#64748b}
+button.secondary,button.secondary:hover{background:#e2e8f0;color:#334155;box-shadow:none}
+.rules{list-style:none;padding:0;margin:6px 0 10px;text-align:left;font-size:12px;color:#94a3b8}
+.rules li::before{content:'\25CB  '}
+.rules li.ok{color:#166534}
+.rules li.ok::before{content:'\2714  '}
+.steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.steps span{padding:6px 16px;border-radius:999px;background:#e2e8f0;color:#64748b;font-size:13px;font-weight:600}
+.steps .done{background:#dcfce7;color:#166534}
+.steps .current{background:var(--primary);color:#fff}
+#paymentCard:hover{transform:none}
 </style>
 </head>
 <body>
@@ -119,10 +148,17 @@ tr:last-child td{border-bottom:none}
     </div>
     <input id="email" type="email" placeholder="Email">
     <div class="password-row">
-      <input id="password" type="password" placeholder="Password (min 8 characters)">
+      <input id="password" type="password" placeholder="Password" oninput="updatePasswordChecks()">
       <button type="button" id="showPassword" class="ghost" onclick="togglePassword()">Show</button>
     </div>
     <input id="confirmPassword" type="password" placeholder="Confirm password" class="hidden">
+    <ul id="passwordRules" class="rules hidden">
+      <li id="rule-length">At least 8 characters</li>
+      <li id="rule-upper">An uppercase letter (A-Z)</li>
+      <li id="rule-lower">A lowercase letter (a-z)</li>
+      <li id="rule-number">A number (0-9)</li>
+      <li id="rule-special">A special character (@ # $ ! %)</li>
+    </ul>
     <button id="loginButton" onclick="login()">Login</button>
     <button id="registerButton" class="hidden" onclick="registerAccount()">Create account</button>
   </section>
@@ -131,6 +167,12 @@ tr:last-child td{border-bottom:none}
       <div><h1>Where to next?</h1><p>Search a route, pick your seats, pay and fly. Seats update live.</p></div>
       <span class="hero-plane">&#9992;</span>
     </div>
+    <div class="mainnav">
+      <button id="navtab-book" class="navtab active" onclick="showMainTab('book')">&#9992; Book a flight</button>
+      <button id="navtab-payment" class="navtab hidden" onclick="showMainTab('payment')">&#128179; Payment</button>
+      <button id="navtab-bookings" class="navtab" onclick="showMainTab('bookings')">&#127903; My bookings</button>
+    </div>
+    <div id="tab-book">
     <section class="card">
       <h2>🔎 Search flights</h2>
       <select id="origin"></select>
@@ -162,26 +204,60 @@ tr:last-child td{border-bottom:none}
       <p id="selection"></p>
       <button onclick="openPayment()">Continue to payment</button>
     </section>
-    <section id="paymentCard" class="card hidden">
-      <h2>🔒 Payment details</h2>
-      <p id="paymentSummary"></p>
-      <label>Pay with: <select id="paymentMethod" onchange="showPaymentHint()"><option>Card</option><option>JazzCash</option><option>Easypaisa</option><option>Bank Transfer</option></select></label><br>
-      <input id="payerName" placeholder="Name on the account">
-      <input id="accountNumber" inputmode="numeric" placeholder="Card / account / mobile number">
-      <p><small id="paymentHint"></small></p>
-      <p><small>Demo payment only. No real money is charged. The full number stays in your browser; only the last 4 digits are saved.</small></p>
-      <button onclick="confirmBooking()">Pay now</button>
-      <button onclick="closePayment()">Back</button>
+    </div>
+    <div id="tab-payment" class="hidden">
+    <div class="steps"><span class="done">1 Seats</span><span class="current">2 Payment</span><span>3 Confirmation</span></div>
+    <section id="paymentCard" class="card">
+      <h2>&#128274; Payment</h2>
+      <div id="paymentSummary" class="summary"></div>
+      <div class="methods">
+        <button id="method-Card" class="method active" onclick="setPaymentMethod('Card')">Card</button>
+        <button id="method-JazzCash" class="method" onclick="setPaymentMethod('JazzCash')">JazzCash</button>
+        <button id="method-Easypaisa" class="method" onclick="setPaymentMethod('Easypaisa')">Easypaisa</button>
+        <button id="method-Bank" class="method" onclick="setPaymentMethod('Bank Transfer')">Bank transfer</button>
+      </div>
+      <label class="field"><span id="payerLabel">Name on card</span><input id="payerName" autocomplete="off"></label>
+      <div id="cardFields">
+        <label class="field">Card number<input id="cardNumber" inputmode="numeric" maxlength="19" placeholder="1234 5678 9012 3456" oninput="formatCardNumber(this)"></label>
+        <div class="row">
+          <label class="field">Expiry (MM/YY)<input id="cardExpiry" maxlength="5" placeholder="MM/YY" oninput="formatExpiry(this)"></label>
+          <label class="field">CVV<input id="cardCvv" type="password" inputmode="numeric" maxlength="4" placeholder="***"></label>
+        </div>
+        <label class="field">Billing address<input id="billingAddress"></label>
+        <div class="row">
+          <label class="field">City<input id="billingCity"></label>
+          <label class="field">Postal code<input id="postalCode" inputmode="numeric" maxlength="10"></label>
+          <label class="field">Country<select id="billingCountry"><option>Pakistan</option><option>United Arab Emirates</option><option>Saudi Arabia</option><option>United Kingdom</option><option>United States</option><option>Other</option></select></label>
+        </div>
+      </div>
+      <div id="walletFields" class="hidden">
+        <label class="field">Mobile account number<input id="walletNumber" inputmode="numeric" maxlength="11" placeholder="03XXXXXXXXX"></label>
+        <label class="field">PIN<input id="walletPin" type="password" inputmode="numeric" maxlength="5" placeholder="4 or 5 digits"></label>
+      </div>
+      <div id="bankFields" class="hidden">
+        <label class="field">Bank<select id="bankName"><option>HBL</option><option>UBL</option><option>Meezan Bank</option><option>MCB</option><option>Allied Bank</option><option>Bank Alfalah</option></select></label>
+        <label class="field">Account number<input id="bankAccount" inputmode="numeric" maxlength="24" placeholder="8 to 24 digits"></label>
+      </div>
+      <label class="field">Email for the receipt<input id="receiptEmail" type="email" placeholder="you@example.com"></label>
+      <label class="check"><input id="acceptTerms" type="checkbox"> I accept the fare rules and refund policy (100% refund more than 48 hours before departure, 50% from 24 to 48 hours, none after that).</label>
+      <p class="note">Demo payment only. No real money is charged. Card numbers, CVV and PINs are checked in your browser and never sent or stored. Only the last digits are saved.</p>
+      <button class="secondary" onclick="closePayment()">Back to seats</button>
+      <button id="payButton" onclick="confirmBooking()">Pay</button>
     </section>
+    </div>
+    <div id="tab-bookings" class="hidden">
     <section class="card">
       <h2>🎟 My bookings</h2>
       <table><tbody id="bookings"></tbody></table>
     </section>
+    </div>
   </div>
 </main>
 <div class="footer">Demo project &middot; payments are simulated &middot; only the last 4 digits are saved</div>
 <script>
 let selectedFlightId = null;
+let selectedFlightNumber = '';
+let paymentMethod = 'Card';
 let selectedSeat = null;
 let seatFilter = 'all';
 let cabinSeats = [];
@@ -211,12 +287,14 @@ function showUser(user) {
   byId('logout').classList.toggle('hidden', !loggedIn);
   byId('who').textContent = loggedIn ? (user.FullName || user.Email) : '';
   if (loggedIn) { loadAirports(); loadBookings(); }
-  else { byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); }
+  else { byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); byId('navtab-payment').classList.add('hidden'); showMainTab('book'); }
 }
 const login = () => run(async () => {
   showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
 });
 const registerAccount = () => run(async () => {
+  const passwordProblem = checkPassword(byId('password').value);
+  if (passwordProblem) throw new Error(passwordProblem);
   if (byId('password').value !== byId('confirmPassword').value) throw new Error('Passwords do not match.');
   await api('/register', 'POST', {fullName: byId('fullName').value, phone: byId('phone').value,
     email: byId('email').value, password: byId('password').value});
@@ -250,6 +328,7 @@ const loadUpcoming = () => run(async () => {
 });
 const chooseSeat = (flightId, flightNumber) => run(async () => {
   selectedFlightId = flightId;
+  selectedFlightNumber = flightNumber;
   selectedSeat = null;
   byId('selection').textContent = '';
   byId('groupOptions').innerHTML = '';
@@ -304,42 +383,81 @@ const findGroupSeats = () => run(async () => {
 function pickGroup(seatList) {
   setChosenSeats(seatList.split(','));
 }
-const paymentRules = {
-  'Card': {length: 16, hint: 'Enter your 16-digit card number.'},
-  'JazzCash': {length: 11, hint: 'Enter your 11-digit mobile number (03XXXXXXXXX).'},
-  'Easypaisa': {length: 11, hint: 'Enter your 11-digit mobile number (03XXXXXXXXX).'},
-  'Bank Transfer': {length: 0, hint: 'Enter your account number (8 to 24 digits).'}
-};
-function showPaymentHint() {
-  byId('paymentHint').textContent = paymentRules[byId('paymentMethod').value].hint;
+const methodIds = {'Card': 'Card', 'JazzCash': 'JazzCash', 'Easypaisa': 'Easypaisa', 'Bank Transfer': 'Bank'};
+function chosenTotal() {
+  const chosen = selectedSeat ? selectedSeat.split(',') : [];
+  return cabinSeats.filter(s => chosen.includes(s.SeatNumber)).reduce((sum, s) => sum + Number(s.Price), 0);
+}
+function setPaymentMethod(method) {
+  paymentMethod = method;
+  Object.keys(methodIds).forEach(name => byId('method-' + methodIds[name]).classList.toggle('active', name === method));
+  byId('cardFields').classList.toggle('hidden', method !== 'Card');
+  byId('walletFields').classList.toggle('hidden', method !== 'JazzCash' && method !== 'Easypaisa');
+  byId('bankFields').classList.toggle('hidden', method !== 'Bank Transfer');
+  byId('payerLabel').textContent = method === 'Card' ? 'Name on card' : 'Account holder name';
+}
+function formatCardNumber(box) {
+  box.value = box.value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+}
+function formatExpiry(box) {
+  const digits = box.value.replace(/\D/g, '').slice(0, 4);
+  box.value = digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits;
 }
 function openPayment() {
   if (!selectedSeat) { notify('Please click a seat first.', true); return; }
-  byId('paymentSummary').textContent = byId('selection').textContent;
-  showPaymentHint();
-  byId('paymentCard').classList.remove('hidden');
-  byId('paymentCard').scrollIntoView({behavior: 'smooth'});
+  const total = chosenTotal();
+  const seatCount = selectedSeat.split(',').length;
+  byId('paymentSummary').innerHTML = `Flight <strong>${selectedFlightNumber}</strong> - ${seatCount === 1 ? 'Seat' : 'Seats'} <strong>${selectedSeat.replaceAll(',', ', ')}</strong><br>Total to pay: <strong>PKR ${total.toLocaleString()}</strong>`;
+  byId('payButton').textContent = `Pay PKR ${total.toLocaleString()}`;
+  setPaymentMethod(paymentMethod);
+  byId('navtab-payment').classList.remove('hidden');
+  showMainTab('payment');
 }
 function closePayment() {
-  byId('paymentCard').classList.add('hidden');
+  byId('navtab-payment').classList.add('hidden');
+  showMainTab('book');
+  byId('seatCard').scrollIntoView({behavior: 'smooth'});
+}
+function readPaymentDetails() {
+  const name = byId('payerName').value.trim();
+  if (name.length < 2) throw new Error(paymentMethod === 'Card' ? 'Please enter the name on the card.' : 'Please enter the account holder name.');
+  let digits;
+  if (paymentMethod === 'Card') {
+    digits = byId('cardNumber').value.replace(/\D/g, '');
+    if (digits.length !== 16) throw new Error('Enter your 16-digit card number.');
+    const expiry = byId('cardExpiry').value.match(/^(\d{2})\/(\d{2})$/);
+    if (!expiry || Number(expiry[1]) < 1 || Number(expiry[1]) > 12) throw new Error('Enter the expiry date as MM/YY.');
+    const now = new Date();
+    const expiryYear = 2000 + Number(expiry[2]);
+    if (expiryYear < now.getFullYear() || (expiryYear === now.getFullYear() && Number(expiry[1]) < now.getMonth() + 1)) throw new Error('This card has expired.');
+    if (!/^\d{3,4}$/.test(byId('cardCvv').value)) throw new Error('Enter the 3 or 4 digit CVV.');
+    if (byId('billingAddress').value.trim().length < 5) throw new Error('Please enter your billing address.');
+    if (byId('billingCity').value.trim().length < 2) throw new Error('Please enter your city.');
+    if (!/^\d{4,10}$/.test(byId('postalCode').value.trim())) throw new Error('Please enter a valid postal code.');
+  } else if (paymentMethod === 'Bank Transfer') {
+    digits = byId('bankAccount').value.replace(/\D/g, '');
+    if (digits.length < 8 || digits.length > 24) throw new Error('Enter your account number (8 to 24 digits).');
+  } else {
+    digits = byId('walletNumber').value.replace(/\D/g, '');
+    if (!/^03\d{9}$/.test(digits)) throw new Error('Enter your 11-digit mobile number (03XXXXXXXXX).');
+    if (!/^\d{4,5}$/.test(byId('walletPin').value)) throw new Error('Enter your 4 or 5 digit PIN.');
+  }
+  if (!/^\S+@\S+\.\S+$/.test(byId('receiptEmail').value.trim())) throw new Error('Enter a valid email for the receipt.');
+  if (!byId('acceptTerms').checked) throw new Error('Please accept the fare rules and refund policy.');
+  return {payerName: name, accountMask: '****' + digits.slice(-4)};
 }
 const confirmBooking = () => run(async () => {
   if (!selectedSeat) throw new Error('Please click a seat first.');
-  const method = byId('paymentMethod').value;
-  const rule = paymentRules[method];
-  const payerName = byId('payerName').value.trim();
-  const digits = byId('accountNumber').value.replace(/[\s-]/g, '');
-  if (payerName.length < 2) throw new Error('Please enter the name on the account.');
-  const validLength = rule.length ? digits.length === rule.length : digits.length >= 8 && digits.length <= 24;
-  if (!/^\d+$/.test(digits) || !validLength) throw new Error(rule.hint);
+  const details = readPaymentDetails();
   const ticket = await api(selectedSeat.includes(',') ? '/bookings/group' : '/bookings', 'POST', {flightId: String(selectedFlightId),
-    seatNumber: selectedSeat, seatNumbers: selectedSeat, paymentMethod: method, payerName: payerName, accountMask: '****' + digits.slice(-4)});
-  byId('accountNumber').value = '';
-  notify(`Paid PKR ${ticket.Price} by ${ticket.PaymentMethod} (${ticket.AccountMask}). Ref: ${ticket.PaymentReference}`);
-  byId('paymentCard').classList.add('hidden');
+    seatNumber: selectedSeat, seatNumbers: selectedSeat, paymentMethod: paymentMethod, payerName: details.payerName, accountMask: details.accountMask});
+  ['cardNumber', 'cardExpiry', 'cardCvv', 'walletNumber', 'walletPin', 'bankAccount'].forEach(id => byId(id).value = '');
+  byId('acceptTerms').checked = false;
+  notify(`Paid PKR ${ticket.Price} by ${ticket.PaymentMethod} (${ticket.AccountMask}). Receipt for ${byId('receiptEmail').value.trim()}. Ref: ${ticket.PaymentReference}`);
+  byId('navtab-payment').classList.add('hidden');
   byId('seatCard').classList.add('hidden');
-  loadBookings();
   searchFlights();
+  showMainTab('bookings');
 });
 const loadBookings = () => run(async () => {
   const bookings = await api('/bookings/mine');
@@ -360,11 +478,35 @@ const cancelBooking = (bookingId, expectedRefund) => run(async () => {
 function showTab(tabName) {
   const registering = tabName === 'register';
   byId('confirmPassword').classList.toggle('hidden', !registering);
+  byId('passwordRules').classList.toggle('hidden', !registering);
   byId('registerFields').classList.toggle('hidden', !registering);
   byId('loginButton').classList.toggle('hidden', registering);
   byId('registerButton').classList.toggle('hidden', !registering);
   byId('loginTab').classList.toggle('active', !registering);
   byId('registerTab').classList.toggle('active', registering);
+}
+const passwordTests = {
+  'rule-length': p => p.length >= 8,
+  'rule-upper': p => /[A-Z]/.test(p),
+  'rule-lower': p => /[a-z]/.test(p),
+  'rule-number': p => /\d/.test(p),
+  'rule-special': p => /[^A-Za-z0-9]/.test(p)
+};
+function updatePasswordChecks() {
+  const password = byId('password').value;
+  Object.keys(passwordTests).forEach(id => byId(id).classList.toggle('ok', passwordTests[id](password)));
+}
+function checkPassword(password) {
+  return Object.values(passwordTests).every(test => test(password)) ? ''
+    : 'Password needs 8+ characters with an uppercase letter, a lowercase letter, a number and a special character (like @ # $ !).';
+}
+function showMainTab(name) {
+  ['book', 'payment', 'bookings'].forEach(tab => {
+    byId('tab-' + tab).classList.toggle('hidden', tab !== name);
+    byId('navtab-' + tab).classList.toggle('active', tab === name);
+  });
+  if (name === 'bookings') loadBookings();
+  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 function togglePassword() {
   const showing = byId('password').type === 'text';

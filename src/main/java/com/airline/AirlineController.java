@@ -70,9 +70,10 @@ public class AirlineController {
     }
         @PostMapping("/bookings/group")
     public Map<String, Object> bookGroup(@RequestBody Map<String, String> body, HttpSession session) {
-        return jdbc.queryForMap("EXEC usp_BookGroup ?, ?, ?, ?, ?, ?", requirePassengerId(session),
+        return jdbc.queryForMap("EXEC usp_BookGroup ?, ?, ?, ?, ?, ?, ?", requirePassengerId(session),
             Integer.parseInt(body.get("flightId")), body.get("seatNumbers"), body.getOrDefault("paymentMethod", "Card"),
-            body.get("payerName"), body.get("accountMask"));
+            body.get("payerName"), body.get("accountMask"),
+            Integer.parseInt(body.getOrDefault("bagCount", "0")));
     }
     @GetMapping("/flights/upcoming")
     public List<Map<String, Object>> upcomingFlights() {
@@ -85,9 +86,10 @@ public class AirlineController {
     }
     @PostMapping("/bookings")
     public Map<String, Object> book(@RequestBody Map<String, String> body, HttpSession session) {
-        return jdbc.queryForMap("EXEC usp_BookFlight ?, ?, ?, ?, ?, ?",
+        return jdbc.queryForMap("EXEC usp_BookFlight ?, ?, ?, ?, ?, ?, ?",
             requirePassengerId(session), Integer.parseInt(body.get("flightId")), body.get("seatNumber"),
-            body.getOrDefault("paymentMethod", "Card"), body.get("payerName"), body.get("accountMask"));
+            body.getOrDefault("paymentMethod", "Card"), body.get("payerName"), body.get("accountMask"),
+            Integer.parseInt(body.getOrDefault("bagCount", "0")));
     }
     @GetMapping("/bookings/mine")
     public List<Map<String, Object>> myBookings(HttpSession session) {

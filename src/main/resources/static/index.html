@@ -163,7 +163,7 @@ textarea:focus{outline:2px solid var(--primary)}
     </div>
     <div id="registerFields" class="hidden">
       <input id="fullName" placeholder="Full name">
-      <input id="phone" placeholder="Phone">
+      <input id="phone" inputmode="tel" placeholder="Phone (unique, e.g. 03001234567)">
     </div>
     <input id="email" type="email" placeholder="Email">
     <div class="password-row">
@@ -224,6 +224,11 @@ textarea:focus{outline:2px solid var(--primary)}
       <div id="groupOptions"></div>
       <div id="seats"></div>
       <p id="selection"></p>
+      <div class="summary">
+        <strong>&#129523; Baggage</strong> <select id="bagSelect" onchange="updateBagFee()"><option value="0">No checked bags</option></select>
+        <div id="bagFeeText" class="note"></div>
+        <small>1 free checked bag per passenger, PKR 3,000 for each extra bag (up to 3 bags per passenger). The fee is added to your payment below.</small>
+      </div>
       <button onclick="openPayment()">Continue to payment</button>
     </section>
     </div>
@@ -276,7 +281,7 @@ textarea:focus{outline:2px solid var(--primary)}
     <div id="tab-baggage" class="hidden">
     <section class="card">
       <h2>&#129523; Add baggage</h2>
-      <p class="note">1 free checked bag per passenger. Each extra bag costs PKR 3,000 (maximum 3 bags per passenger). Every bag gets a tag number.</p>
+      <p class="note">1 free checked bag per passenger. Each extra bag costs PKR 3,000 (maximum 3 bags per passenger). Every bag gets a tag number. You can choose baggage while booking, and it is paid together with your ticket. Bags added here later are paid at the airport counter.</p>
       <select id="bagBooking"></select>
       <select id="bagCount"><option value="1">1 bag</option><option value="2">2 bags</option><option value="3">3 bags</option></select>
       <button onclick="addBaggage()">Add baggage</button>
@@ -409,6 +414,8 @@ const chooseSeat = (flightId, flightNumber) => run(async () => {
   selectedFlightId = flightId;
   selectedFlightNumber = flightNumber;
   selectedSeat = null;
+  byId('bagSelect').value = '0';
+  renderBagOptions();
   byId('selection').textContent = '';
   byId('groupOptions').innerHTML = '';
   setSeatFilter('all', false);
@@ -453,6 +460,22 @@ function setChosenSeats(chosen) {
   renderCabin();
   const total = cabinSeats.filter(s => chosen.includes(s.SeatNumber)).reduce((sum, s) => sum + Number(s.Price), 0);
   byId('selection').textContent = chosen.length ? `${chosen.length === 1 ? 'Seat' : 'Seats'} ${chosen.join(', ')} - PKR ${total}` : '';
+  renderBagOptions();
+}
+const bagFeeFor = (bags, seats) => Math.max(0, bags - seats) * 3000;
+function renderBagOptions() {
+  const seats = selectedSeat ? selectedSeat.split(',').length : 0;
+  const box = byId('bagSelect');
+  const keep = Number(box.value) || 0;
+  box.innerHTML = Array.from({length: seats * 3 + 1}, (_, n) => `<option value="${n}">${n === 0 ? 'No checked bags' : n + (n === 1 ? ' bag' : ' bags')}</option>`).join('');
+  box.value = String(Math.min(keep, seats * 3));
+  box.disabled = seats === 0;
+  updateBagFee();
+}
+function updateBagFee() {
+  const seats = selectedSeat ? selectedSeat.split(',').length : 0;
+  const fee = bagFeeFor(Number(byId('bagSelect').value) || 0, seats);
+  byId('bagFeeText').textContent = seats ? `Baggage fee: PKR ${fee.toLocaleString()}` : 'Choose your seats first.';
 }
 const findGroupSeats = () => run(async () => {
   const options = await api(`/flights/${selectedFlightId}/group-seats?size=${byId('groupSize').value}&seatClass=${byId('groupClass').value}`);
@@ -484,9 +507,12 @@ function formatExpiry(box) {
 }
 function openPayment() {
   if (!selectedSeat) { notify('Please click a seat first.', true); return; }
-  const total = chosenTotal();
   const seatCount = selectedSeat.split(',').length;
-  byId('paymentSummary').innerHTML = `Flight <strong>${selectedFlightNumber}</strong> - ${seatCount === 1 ? 'Seat' : 'Seats'} <strong>${selectedSeat.replaceAll(',', ', ')}</strong><br>Total to pay: <strong>PKR ${total.toLocaleString()}</strong>`;
+  const bags = Number(byId('bagSelect').value) || 0;
+  const fare = chosenTotal();
+  const bagFee = bagFeeFor(bags, seatCount);
+  const total = fare + bagFee;
+  byId('paymentSummary').innerHTML = `Flight <strong>${selectedFlightNumber}</strong> - ${seatCount === 1 ? 'Seat' : 'Seats'} <strong>${selectedSeat.replaceAll(',', ', ')}</strong><br>Tickets: PKR ${fare.toLocaleString()}<br>Baggage: ${bags} bag${bags === 1 ? '' : 's'} - PKR ${bagFee.toLocaleString()}<br>Total to pay: <strong>PKR ${total.toLocaleString()}</strong>`;
   byId('payButton').textContent = `Pay PKR ${total.toLocaleString()}`;
   setPaymentMethod(paymentMethod);
   byId('navtab-payment').classList.remove('hidden');
@@ -529,10 +555,11 @@ const confirmBooking = () => run(async () => {
   if (!selectedSeat) throw new Error('Please click a seat first.');
   const details = readPaymentDetails();
   const ticket = await api(selectedSeat.includes(',') ? '/bookings/group' : '/bookings', 'POST', {flightId: String(selectedFlightId),
-    seatNumber: selectedSeat, seatNumbers: selectedSeat, paymentMethod: paymentMethod, payerName: details.payerName, accountMask: details.accountMask});
+    seatNumber: selectedSeat, seatNumbers: selectedSeat, paymentMethod: paymentMethod, bagCount: byId('bagSelect').value, payerName: details.payerName, accountMask: details.accountMask});
   ['cardNumber', 'cardExpiry', 'cardCvv', 'walletNumber', 'walletPin', 'bankAccount'].forEach(id => byId(id).value = '');
   byId('acceptTerms').checked = false;
-  notify(`Paid PKR ${ticket.Price} by ${ticket.PaymentMethod} (${ticket.AccountMask}). Receipt for ${byId('receiptEmail').value.trim()}. Ref: ${ticket.PaymentReference}`);
+  byId('bagSelect').value = '0';
+  notify(`Paid PKR ${ticket.Price}${ticket.BagCount ? ' (incl. ' + ticket.BagCount + ' bag' + (ticket.BagCount > 1 ? 's' : '') + ', baggage PKR ' + ticket.BaggageFee + ')' : ''} by ${ticket.PaymentMethod} (${ticket.AccountMask}). Receipt for ${byId('receiptEmail').value.trim()}. Ref: ${ticket.PaymentReference}`);
   byId('navtab-payment').classList.add('hidden');
   byId('seatCard').classList.add('hidden');
   searchFlights();

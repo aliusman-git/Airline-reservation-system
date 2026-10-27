@@ -127,6 +127,25 @@ button.secondary,button.secondary:hover{background:#e2e8f0;color:#334155;box-sha
 .steps .done{background:#dcfce7;color:#166534}
 .steps .current{background:var(--primary);color:#fff}
 #paymentCard:hover{transform:none}
+
+/* ===== Round 2: baggage, claims, feedback, admin ===== */
+.stars{display:flex;gap:4px;margin:6px 0}
+.stars button{background:#e2e8f0;color:#94a3b8;font-size:26px;padding:2px 10px;box-shadow:none;line-height:1.2}
+.stars button:hover{background:#fde68a;color:#f59e0b}
+.stars button.on{background:#fef3c7;color:#f59e0b}
+.rating{color:#f59e0b;letter-spacing:2px;white-space:nowrap}
+textarea{width:100%;box-sizing:border-box;padding:10px 14px;border:1px solid color-mix(in srgb,var(--primary) 35%,white);border-radius:10px;font:inherit;font-size:14px;min-height:80px;margin:4px 0}
+textarea:focus{outline:2px solid var(--primary)}
+.badge.Reported,.badge.Searching{background:#fef3c7;color:#92400e}
+.badge.Found,.badge.Delivered,.badge.Arrived{background:#dcfce7;color:#166534}
+.badge.Lost{background:#fee2e2;color:#991b1b}
+.badge.CompensationApproved{background:#dbeafe;color:#1e40af}
+.badge.CheckedIn{background:#e0f2fe;color:#075985}
+.timeline{margin:6px 0 0;padding-left:18px;font-size:12px;color:#475569}
+.claimbox{border:1px solid color-mix(in srgb,var(--primary) 18%,white);border-radius:12px;padding:12px 14px;margin:10px 0}
+.claimbox .head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14px}
+.admin-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.admin-row input{flex:1;min-width:120px}
 </style>
 </head>
 <body>
@@ -171,6 +190,9 @@ button.secondary,button.secondary:hover{background:#e2e8f0;color:#334155;box-sha
       <button id="navtab-book" class="navtab active" onclick="showMainTab('book')">&#9992; Book a flight</button>
       <button id="navtab-payment" class="navtab hidden" onclick="showMainTab('payment')">&#128179; Payment</button>
       <button id="navtab-bookings" class="navtab" onclick="showMainTab('bookings')">&#127903; My bookings</button>
+      <button id="navtab-baggage" class="navtab" onclick="showMainTab('baggage')">&#129523; Baggage</button>
+      <button id="navtab-feedback" class="navtab" onclick="showMainTab('feedback')">&#11088; Feedback</button>
+      <button id="navtab-admin" class="navtab hidden" onclick="showMainTab('admin')">&#128737; Admin</button>
     </div>
     <div id="tab-book">
     <section class="card">
@@ -251,6 +273,58 @@ button.secondary,button.secondary:hover{background:#e2e8f0;color:#334155;box-sha
       <table><tbody id="bookings"></tbody></table>
     </section>
     </div>
+    <div id="tab-baggage" class="hidden">
+    <section class="card">
+      <h2>&#129523; Add baggage</h2>
+      <p class="note">1 free checked bag per passenger. Each extra bag costs PKR 3,000 (maximum 3 bags per passenger). Every bag gets a tag number.</p>
+      <select id="bagBooking"></select>
+      <select id="bagCount"><option value="1">1 bag</option><option value="2">2 bags</option><option value="3">3 bags</option></select>
+      <button onclick="addBaggage()">Add baggage</button>
+    </section>
+    <section class="card">
+      <h2>&#127991; My bags</h2>
+      <table><tbody id="bagList"></tbody></table>
+    </section>
+    <section id="claimForm" class="card hidden">
+      <h2>&#128270; Report a baggage problem</h2>
+      <p id="claimBagInfo" class="summary"></p>
+      <label class="field">What happened?<select id="claimType"><option value="Lost">Lost</option><option value="Delayed">Delayed</option><option value="Damaged">Damaged</option></select></label>
+      <label class="field">Describe the bag and the problem (colour, size, contents, damage)<textarea id="claimDescription" maxlength="500"></textarea></label>
+      <label class="field">Contact phone<input id="claimPhone" inputmode="tel" placeholder="03XXXXXXXXX"></label>
+      <button class="secondary" onclick="byId('claimForm').classList.add('hidden')">Cancel</button>
+      <button onclick="submitClaim()">Submit claim</button>
+    </section>
+    <section class="card">
+      <h2>&#128230; My claims</h2>
+      <div id="claimList"></div>
+    </section>
+    </div>
+    <div id="tab-feedback" class="hidden">
+    <section class="card">
+      <h2>&#11088; Share your feedback</h2>
+      <div class="stars" id="stars"></div>
+      <div class="row">
+        <label class="field">Category<select id="fbCategory"><option>Booking</option><option>Payment</option><option>Flight</option><option>Baggage</option><option>Website</option><option>Other</option></select></label>
+        <label class="field">About booking (optional)<select id="fbBooking"></select></label>
+      </div>
+      <label class="field">Your comment<textarea id="fbComment" maxlength="1000" placeholder="Tell us what went well or what we can improve"></textarea></label>
+      <button onclick="submitFeedback()">Send feedback</button>
+    </section>
+    <section class="card">
+      <h2>&#128172; My feedback</h2>
+      <table><tbody id="fbList"></tbody></table>
+    </section>
+    </div>
+    <div id="tab-admin" class="hidden">
+    <section class="card">
+      <h2>&#128737; Baggage claims (admin)</h2>
+      <div id="adminClaims"></div>
+    </section>
+    <section class="card">
+      <h2>&#128172; All feedback</h2>
+      <table><tbody id="adminFeedback"></tbody></table>
+    </section>
+    </div>
   </div>
 </main>
 <div class="footer">Demo project &middot; payments are simulated &middot; only the last 4 digits are saved</div>
@@ -286,8 +360,13 @@ function showUser(user) {
   byId('appSection').classList.toggle('hidden', !loggedIn);
   byId('logout').classList.toggle('hidden', !loggedIn);
   byId('who').textContent = loggedIn ? (user.FullName || user.Email) : '';
-  if (loggedIn) { loadAirports(); loadBookings(); }
-  else { byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); byId('navtab-payment').classList.add('hidden'); showMainTab('book'); }
+  if (loggedIn) {
+    const admin = user.Role === 'Admin';
+    applyRole(admin);
+    if (admin) showMainTab('admin');
+    else { loadAirports(); loadBookings(); showMainTab('book'); }
+  }
+  else { byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); byId('navtab-payment').classList.add('hidden'); applyRole(false); showMainTab('book'); }
 }
 const login = () => run(async () => {
   showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
@@ -501,11 +580,14 @@ function checkPassword(password) {
     : 'Password needs 8+ characters with an uppercase letter, a lowercase letter, a number and a special character (like @ # $ !).';
 }
 function showMainTab(name) {
-  ['book', 'payment', 'bookings'].forEach(tab => {
+  ['book', 'payment', 'bookings', 'baggage', 'feedback', 'admin'].forEach(tab => {
     byId('tab-' + tab).classList.toggle('hidden', tab !== name);
     byId('navtab-' + tab).classList.toggle('active', tab === name);
   });
   if (name === 'bookings') loadBookings();
+  if (name === 'baggage') loadBaggage();
+  if (name === 'feedback') loadFeedback();
+  if (name === 'admin') loadAdmin();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 function togglePassword() {
@@ -515,6 +597,103 @@ function togglePassword() {
   byId('confirmPassword').type = newType;
   byId('showPassword').textContent = showing ? 'Show' : 'Hide';
 }
+const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const cls = text => String(text ?? '').replace(/[^A-Za-z]/g, '');
+function applyRole(admin) {
+  ['book', 'bookings', 'baggage', 'feedback'].forEach(t => byId('navtab-' + t).classList.toggle('hidden', admin));
+  byId('navtab-admin').classList.toggle('hidden', !admin);
+}
+async function bookingOptions(selectId, confirmedOnly, emptyLabel) {
+  const bookings = await api('/bookings/mine');
+  const list = bookings.filter(b => !confirmedOnly || b.BookingStatus === 'Confirmed');
+  byId(selectId).innerHTML = (emptyLabel ? `<option value="0">${emptyLabel}</option>` : '') +
+    list.map(b => `<option value="${b.BookingID}">#${b.BookingID} - ${esc(b.FlightNumber)} (${esc(b.OriginCode)} to ${esc(b.DestinationCode)}), seats ${esc(b.SeatNumber)}</option>`).join('');
+  if (!list.length && !emptyLabel) byId(selectId).innerHTML = '<option value="">No confirmed bookings</option>';
+}
+const addBaggage = () => run(async () => {
+  const bookingId = byId('bagBooking').value;
+  if (!bookingId) throw new Error('You need a confirmed booking first.');
+  const result = await api('/baggage', 'POST', {bookingId, bagCount: byId('bagCount').value});
+  notify(`${result.BagsAdded} bag(s) added. Baggage fee: PKR ${result.TotalFee}`);
+  loadBaggage();
+});
+let claimBagId = null;
+const loadBaggage = () => run(async () => {
+  await bookingOptions('bagBooking', true);
+  const bags = await api('/baggage/mine');
+  byId('bagList').innerHTML = bags.length === 0 ? '<tr><td>No bags yet. Add baggage to a booking above.</td></tr>'
+    : '<tr><th>Tag</th><th>Flight</th><th>Route</th><th>Fee</th><th>Bag status</th><th>Claim</th><th></th></tr>' +
+      bags.map(b => `<tr><td><strong>${esc(b.TagNumber)}</strong></td><td>${esc(b.FlightNumber)}</td><td>${esc(b.OriginCode)} to ${esc(b.DestinationCode)}</td>
+        <td>${b.Fee}</td><td><span class="badge ${cls(b.BagStatus)}">${esc(b.BagStatus)}</span></td>
+        <td>${b.ClaimReference ? esc(b.ClaimReference) + ' (' + esc(b.ClaimStatus) + ')' : '-'}</td>
+        <td><button class="secondary" onclick="openClaim(${b.BagID}, '${esc(b.TagNumber)}')">Report problem</button></td></tr>`).join('');
+  const claims = await api('/claims/mine');
+  byId('claimList').innerHTML = claims.length === 0 ? '<p class="note">No claims. If a bag is lost, delayed or damaged, use Report problem above.</p>'
+    : claims.map(c => `<div class="claimbox"><div class="head"><span><strong>${esc(c.ClaimReference)}</strong> - ${esc(c.ClaimType)} bag ${esc(c.TagNumber)} (${esc(c.FlightNumber)})</span>
+        <span class="badge ${cls(c.Status)}">${esc(c.Status)}</span></div>
+        ${c.CompensationAmount ? `<div>Compensation approved: <strong>PKR ${c.CompensationAmount}</strong></div>` : ''}
+        <ul class="timeline">${String(c.Timeline ?? '').split('|').map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>`).join('');
+});
+function openClaim(bagId, tag) {
+  claimBagId = bagId;
+  byId('claimBagInfo').innerHTML = `Bag tag <strong>${tag}</strong>`;
+  byId('claimDescription').value = '';
+  byId('claimForm').classList.remove('hidden');
+  byId('claimForm').scrollIntoView({behavior: 'smooth'});
+}
+const submitClaim = () => run(async () => {
+  const result = await api(`/baggage/${claimBagId}/report`, 'POST',
+    {claimType: byId('claimType').value, description: byId('claimDescription').value, contactPhone: byId('claimPhone').value});
+  notify('Claim submitted. Your reference: ' + result.ClaimReference);
+  byId('claimForm').classList.add('hidden');
+  loadBaggage();
+});
+let feedbackRating = 0;
+function drawStars() {
+  byId('stars').innerHTML = [1, 2, 3, 4, 5].map(n => `<button type="button" class="${n <= feedbackRating ? 'on' : ''}" onclick="setRating(${n})" title="${n} star${n > 1 ? 's' : ''}">&#9733;</button>`).join('');
+}
+function setRating(n) { feedbackRating = n; drawStars(); }
+const loadFeedback = () => run(async () => {
+  drawStars();
+  await bookingOptions('fbBooking', false, 'General (no booking)');
+  const items = await api('/feedback/mine');
+  byId('fbList').innerHTML = items.length === 0 ? '<tr><td>No feedback sent yet.</td></tr>'
+    : '<tr><th>Date</th><th>Rating</th><th>Category</th><th>Comment</th></tr>' +
+      items.map(f => `<tr><td>${showTime(f.CreatedAt).slice(0, 16)}</td><td class="rating">${'&#9733;'.repeat(f.Rating)}</td><td>${esc(f.Category)}</td><td>${esc(f.Comment)}</td></tr>`).join('');
+});
+const submitFeedback = () => run(async () => {
+  if (!feedbackRating) throw new Error('Please choose a star rating.');
+  await api('/feedback', 'POST', {rating: String(feedbackRating), category: byId('fbCategory').value,
+    bookingId: byId('fbBooking').value || '0', comment: byId('fbComment').value});
+  notify('Thank you for your feedback!');
+  feedbackRating = 0;
+  byId('fbComment').value = '';
+  loadFeedback();
+});
+const claimStatuses = ['Reported', 'Searching', 'Found', 'Delivered', 'Compensation Approved'];
+const loadAdmin = () => run(async () => {
+  const claims = await api('/admin/claims');
+  byId('adminClaims').innerHTML = claims.length === 0 ? '<p class="note">No claims yet.</p>'
+    : claims.map(c => `<div class="claimbox"><div class="head"><span><strong>${esc(c.ClaimReference)}</strong> - ${esc(c.ClaimType)} - bag ${esc(c.TagNumber)} - ${esc(c.FlightNumber)} - ${esc(c.FullName)}</span>
+        <span class="badge ${cls(c.Status)}">${esc(c.Status)}</span></div>
+        <div class="note">${esc(c.Description)} (phone ${esc(c.ContactPhone)})</div>
+        <ul class="timeline">${String(c.Timeline ?? '').split('|').map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+        <div class="admin-row">
+          <select id="st-${c.ClaimID}">${claimStatuses.map(x => `<option ${x === c.Status ? 'selected' : ''}>${x}</option>`).join('')}</select>
+          <input id="nt-${c.ClaimID}" placeholder="Note for the passenger">
+          <input id="am-${c.ClaimID}" type="number" min="0" placeholder="Compensation PKR" style="max-width:160px">
+          <button onclick="updateClaim(${c.ClaimID})">Update</button>
+        </div></div>`).join('');
+  const items = await api('/admin/feedback');
+  byId('adminFeedback').innerHTML = items.length === 0 ? '<tr><td>No feedback yet.</td></tr>'
+    : '<tr><th>Date</th><th>Passenger</th><th>Rating</th><th>Category</th><th>Comment</th></tr>' +
+      items.map(f => `<tr><td>${showTime(f.CreatedAt).slice(0, 16)}</td><td>${esc(f.FullName)}</td><td class="rating">${'&#9733;'.repeat(f.Rating)}</td><td>${esc(f.Category)}</td><td>${esc(f.Comment)}</td></tr>`).join('');
+});
+const updateClaim = id => run(async () => {
+  await api(`/admin/claims/${id}/status`, 'POST', {status: byId('st-' + id).value, note: byId('nt-' + id).value, amount: byId('am-' + id).value || '0'});
+  notify('Claim updated.');
+  loadAdmin();
+});
 try { localStorage.removeItem('theme'); } catch (error) {}
 byId('travelDate').valueAsDate = new Date(Date.now() + 8 * 86400000);
 api('/me').then(showUser).catch(() => showUser(null));

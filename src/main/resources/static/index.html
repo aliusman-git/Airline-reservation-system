@@ -141,6 +141,14 @@ textarea:focus{outline:2px solid var(--primary)}
 .badge.Lost{background:#fee2e2;color:#991b1b}
 .badge.CompensationApproved{background:#dbeafe;color:#1e40af}
 .badge.CheckedIn{background:#e0f2fe;color:#075985}
+.badge.Rebooked{background:#ede9fe;color:#5b21b6}
+.badge.Scheduled{background:#dcfce7;color:#166534}
+.badge.Departed{background:#e2e8f0;color:#334155}
+.badge.Flightcancelled{background:#fee2e2;color:#991b1b}
+.move-note{background:#fffbeb;color:#92400e;border-left:4px solid #f59e0b;padding:8px 12px;font-size:13px}
+.move-note.bad{background:#fef2f2;color:#991b1b;border-left-color:#dc2626}
+.realloc-list label{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #e2e8f0;font-size:13px}
+.table-scroll{overflow-x:auto}
 .timeline{margin:6px 0 0;padding-left:18px;font-size:12px;color:#475569}
 .claimbox{border:1px solid color-mix(in srgb,var(--primary) 18%,white);border-radius:12px;padding:12px 14px;margin:10px 0}
 .claimbox .head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14px}
@@ -325,6 +333,20 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
     </section>
     </div>
     <div id="tab-admin" class="hidden">
+    <section class="card">
+      <h2>&#9992; Flights and re-allocation (admin)</h2>
+      <p class="note">Cancel or reschedule a flight, then move its passengers to another flight on the same route. Every move is saved in the history below.</p>
+      <div id="adminFlights" class="table-scroll"></div>
+    </section>
+    <section class="card hidden" id="reallocPanel">
+      <h2>&#128260; Move passengers</h2>
+      <div id="reallocBody"></div>
+      <div id="reallocError" class="form-error hidden" role="alert"></div>
+    </section>
+    <section class="card">
+      <h2>&#128221; Re-allocation history</h2>
+      <div class="table-scroll"><table><tbody id="adminRealloc"></tbody></table></div>
+    </section>
     <section class="card">
       <h2>&#128737; Baggage claims (admin)</h2>
       <div id="adminClaims"></div>
@@ -607,12 +629,26 @@ const confirmBooking = () => run(async () => {
 const loadBookings = () => run(async () => {
   const bookings = await api('/bookings/mine');
   loadUpcoming();
+  const noticeFor = b => {
+    if (b.BookingStatus === 'Confirmed' && b.FlightStatus === 'Cancelled')
+      return '<div class="move-note bad">&#9888; Flight ' + esc(b.FlightNumber) + ' was cancelled by the airline. The airline may move you to another flight; until then you can cancel this booking for a full refund (PKR ' + esc(b.ExpectedRefund ?? 0) + ').</div>';
+    if (b.MovedFromFlight)
+      return '<div class="move-note">&#128260; The airline moved you from flight ' + esc(b.MovedFromFlight) + ' (seats ' + esc(b.MovedFromSeats) + ') to this flight. Reason: ' + esc(b.MoveReason) + '. You paid nothing extra.</div>';
+    if (b.MovedToBooking)
+      return '<div class="move-note">&#128260; The airline moved this booking to booking #' + esc(b.MovedToBooking) + '.</div>';
+    return '';
+  };
   byId('bookings').innerHTML = bookings.length === 0 ? '<tr><td>No bookings yet.</td></tr>'
     : '<tr><th>#</th><th>Flight</th><th>Route</th><th>Departs</th><th>Seat</th><th>Price</th><th>Status</th><th>Payment</th><th>Refund</th><th></th></tr>' +
-      bookings.map(b => `<tr><td>${b.BookingID}</td><td>${b.FlightNumber}</td><td>${b.OriginCode} to ${b.DestinationCode}</td>
-        <td>${showTime(b.DepartureTime)}</td><td>${b.SeatNumber}</td><td>${b.Price}</td><td><span class="badge ${b.BookingStatus}">${b.BookingStatus}</span></td>
+      bookings.map(b => {
+        const notice = noticeFor(b);
+        const badgeText = b.BookingStatus === 'Confirmed' && b.FlightStatus === 'Cancelled' ? 'Flight cancelled' : b.BookingStatus;
+        return `<tr><td>${b.BookingID}</td><td>${b.FlightNumber}</td><td>${b.OriginCode} to ${b.DestinationCode}</td>
+        <td>${showTime(b.DepartureTime)}</td><td>${b.SeatNumber}</td><td>${b.Price}</td><td><span class="badge ${cls(badgeText)}">${esc(badgeText)}</span></td>
         <td>${b.PaymentMethod ?? '-'}</td><td>${b.RefundAmount ?? ''}</td>
-        <td>${b.BookingStatus === 'Confirmed' ? `<button class="danger" onclick="cancelBooking(${b.BookingID}, ${b.ExpectedRefund ?? 0})">Cancel</button>` : ''}</td></tr>`).join('');
+        <td>${b.BookingStatus === 'Confirmed' ? `<button class="danger" onclick="cancelBooking(${b.BookingID}, ${b.ExpectedRefund ?? 0})">Cancel</button>` : ''}</td></tr>` +
+        (notice ? `<tr><td colspan="10" style="padding:0">${notice}</td></tr>` : '');
+      }).join('');
 });
 const cancelBooking = (bookingId, expectedRefund) => run(async () => {
   if (!confirm(`Cancel this booking? You will get PKR ${expectedRefund} back.`)) return;
@@ -751,7 +787,91 @@ const submitFeedback = async () => {
   }
 };
 const claimStatuses = ['Reported', 'Searching', 'Found', 'Delivered', 'Compensation Approved'];
+let adminFlightList = [];
+let reallocFromId = null;
+const pad2 = number => String(number).padStart(2, '0');
+const toLocalIso = date => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+const loadAdminFlights = async () => {
+  adminFlightList = await api('/admin/flights');
+  byId('adminFlights').innerHTML = '<table><tr><th>Flight</th><th>Route</th><th>Departs</th><th>Arrives</th><th>Status</th><th>Passengers</th><th>Actions</th></tr>' +
+    adminFlightList.map(f => {
+      const needsMoving = f.Status === 'Cancelled' && f.ConfirmedBookings > 0;
+      return `<tr><td><strong>${esc(f.FlightNumber)}</strong></td><td>${esc(f.OriginCode)} to ${esc(f.DestinationCode)}</td>
+        <td>${esc(showTime(f.DepartureTime).slice(0, 16))}</td><td>${esc(showTime(f.ArrivalTime).slice(0, 16))}</td>
+        <td><span class="badge ${cls(f.Status)}">${esc(f.Status)}</span></td>
+        <td>${f.Passengers} (${f.ConfirmedBookings} bookings)</td>
+        <td><div class="admin-row" style="margin-top:0">
+          ${f.Status === 'Scheduled' ? `<button class="danger" onclick="adminCancelFlight(${f.FlightID})">Cancel flight</button><button class="secondary" onclick="adminRescheduleFlight(${f.FlightID})">Reschedule</button>` : ''}
+          ${f.Status !== 'Departed' && f.ConfirmedBookings > 0 ? `<button onclick="openRealloc(${f.FlightID})">${needsMoving ? 'Move ' + f.ConfirmedBookings + ' booking(s)' : 'Move passengers'}</button>` : ''}
+        </div></td></tr>`;
+    }).join('');
+};
+const loadAdminHistory = async () => {
+  const moves = await api('/admin/reallocations');
+  byId('adminRealloc').innerHTML = moves.length === 0 ? '<tr><td>No passengers have been moved yet.</td></tr>'
+    : '<tr><th>When</th><th>Passenger</th><th>From</th><th>To</th><th>Old seats</th><th>New seats</th><th>Reason</th><th>By</th></tr>' +
+      moves.map(m => `<tr><td>${esc(showTime(m.MovedAt).slice(0, 16))}</td><td>${esc(m.FullName)}</td><td>${esc(m.OldFlight)}</td><td>${esc(m.NewFlight)} (${esc(showTime(m.NewDeparture).slice(0, 16))})</td><td>${esc(m.OldSeats)}</td><td>${esc(m.NewSeats)}</td><td>${esc(m.Reason)}</td><td>${esc(m.MovedBy)}</td></tr>`).join('');
+};
+const adminCancelFlight = flightId => run(async () => {
+  const flight = adminFlightList.find(f => f.FlightID === flightId);
+  if (!confirm(`Cancel flight ${flight.FlightNumber}? ${flight.ConfirmedBookings} booking(s) will need to be moved or refunded.`)) return;
+  const result = await api(`/admin/flights/${flightId}/cancel`, 'POST');
+  notify(`Flight cancelled. ${result.AffectedBookings} booking(s) now need to be moved.`);
+  loadAdmin();
+});
+const adminRescheduleFlight = flightId => run(async () => {
+  const flight = adminFlightList.find(f => f.FlightID === flightId);
+  const oldDeparture = new Date(flight.DepartureTime);
+  const durationMs = new Date(flight.ArrivalTime) - oldDeparture;
+  const answer = prompt(`New departure time for ${flight.FlightNumber} (YYYY-MM-DD HH:MM). The flight duration stays the same.`, toLocalIso(oldDeparture).replace('T', ' '));
+  if (answer === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(answer.trim())) throw new Error('Please type the time like 2026-11-05 14:30.');
+  const newDeparture = new Date(answer.trim().replace(' ', 'T'));
+  if (isNaN(newDeparture)) throw new Error('That date or time is not valid.');
+  await api(`/admin/flights/${flightId}/reschedule`, 'POST', {departure: toLocalIso(newDeparture), arrival: toLocalIso(new Date(newDeparture.getTime() + durationMs))});
+  notify('Flight rescheduled. Passengers see the new time in My bookings.');
+  loadAdmin();
+});
+const openRealloc = flightId => run(async () => {
+  clearFormError('reallocError');
+  reallocFromId = flightId;
+  const flight = adminFlightList.find(f => f.FlightID === flightId);
+  const [bookings, targets] = await Promise.all([api(`/admin/flights/${flightId}/bookings`), api(`/admin/flights/${flightId}/targets`)]);
+  const targetOptions = targets.length === 0 ? '' : targets.map(t =>
+    `<option value="${t.FlightID}">${esc(t.FlightNumber)} - ${esc(showTime(t.DepartureTime).slice(0, 16))} - free: ${t.FreeEconomy} Economy, ${t.FreeBusiness} Business</option>`).join('');
+  byId('reallocBody').innerHTML = `
+    <p><strong>${esc(flight.FlightNumber)}</strong> ${esc(flight.OriginCode)} to ${esc(flight.DestinationCode)} - ${esc(showTime(flight.DepartureTime).slice(0, 16))}
+      <span class="badge ${cls(flight.Status)}">${esc(flight.Status)}</span></p>
+    <p class="note">Choose the bookings to move. Passengers keep their seat class and the price they paid. Neighbouring seats are kept together when possible. Baggage and payment move with the booking.</p>
+    <div class="realloc-list">${bookings.map(b => `<label><input type="checkbox" class="realloc-check" value="${b.BookingID}" checked>
+      <span>#${b.BookingID} - ${esc(b.FullName)} (${esc(b.Email)}) - seats ${esc(b.Seats)} - ${b.BaggageKg} kg baggage</span></label>`).join('')}</div>
+    ${targets.length === 0 ? '<p class="move-note bad">There is no other scheduled flight on this route. Add one first (usp_AddFlight) or ask passengers to cancel for a refund.</p>' : `
+    <label class="field">Move to flight<select id="reallocTarget">${targetOptions}</select></label>
+    <label class="field">Reason (shown to the passenger)<input id="reallocReason" maxlength="200" value="${flight.Status === 'Cancelled' ? 'Flight cancelled by the airline' : 'Flight schedule change'}"></label>
+    <div class="admin-row"><button onclick="doRealloc()">Move selected passengers</button><button class="secondary" onclick="closeRealloc()">Close</button></div>`}`;
+  byId('reallocPanel').classList.remove('hidden');
+  byId('reallocPanel').scrollIntoView({behavior: 'smooth', block: 'start'});
+});
+const closeRealloc = () => { byId('reallocPanel').classList.add('hidden'); clearFormError('reallocError'); reallocFromId = null; };
+const doRealloc = async () => {
+  clearFormError('reallocError');
+  try {
+    const chosen = [...document.querySelectorAll('.realloc-check:checked')].map(box => box.value);
+    if (chosen.length === 0) return showFormError('reallocError', 'Select at least one booking to move.');
+    const target = byId('reallocTarget');
+    const targetText = target.options[target.selectedIndex].text;
+    if (!confirm(`Move ${chosen.length} booking(s) to ${targetText.split(' - ')[0]}? This cannot be undone.`)) return;
+    const result = await api('/admin/reallocate', 'POST', {fromFlightId: String(reallocFromId), toFlightId: target.value, bookingIds: chosen.join(','), reason: byId('reallocReason').value});
+    notify(`Moved ${result.MovedBookings} booking(s) (${result.MovedSeats} seat(s)).`);
+    closeRealloc();
+    loadAdmin();
+  } catch (error) {
+    showFormError('reallocError', 'Not moved: ' + error.message);
+  }
+};
 const loadAdmin = () => run(async () => {
+  await loadAdminFlights();
+  await loadAdminHistory();
   const claims = await api('/admin/claims');
   byId('adminClaims').innerHTML = claims.length === 0 ? '<p class="note">No claims yet.</p>'
     : claims.map(c => `<div class="claimbox"><div class="head"><span><strong>${esc(c.ClaimReference)}</strong> - ${esc(c.ClaimType)} - bag ${esc(c.TagNumber)} - ${esc(c.FlightNumber)} - ${esc(c.FullName)}</span>

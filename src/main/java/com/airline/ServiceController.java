@@ -2,6 +2,8 @@ package com.airline;
 import jakarta.servlet.http.HttpSession;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import org.springframework.core.NestedExceptionUtils;
@@ -63,6 +65,46 @@ public class ServiceController {
         requireAdmin(session);
         return readable(jdbc.queryForList("EXEC usp_GetFeedback 0"));
     }
+    @GetMapping("/admin/flights")
+    public List<Map<String, Object>> adminFlights(HttpSession session) {
+        requireAdmin(session);
+        return readable(jdbc.queryForList("EXEC usp_AdminGetFlights"));
+    }
+    @PostMapping("/admin/flights/{flightId}/cancel")
+    public Map<String, Object> cancelFlight(@PathVariable int flightId, HttpSession session) {
+        requireAdmin(session);
+        return jdbc.queryForMap("EXEC usp_AdminCancelFlight ?", flightId);
+    }
+    @PostMapping("/admin/flights/{flightId}/reschedule")
+    public Map<String, Object> rescheduleFlight(@PathVariable int flightId, @RequestBody Map<String, String> body, HttpSession session) {
+        requireAdmin(session);
+        Timestamp newDeparture = Timestamp.valueOf(LocalDateTime.parse(body.get("departure")));
+        Timestamp newArrival = Timestamp.valueOf(LocalDateTime.parse(body.get("arrival")));
+        return readableRow(jdbc.queryForMap("EXEC usp_AdminRescheduleFlight ?, ?, ?", flightId, newDeparture, newArrival));
+    }
+    @GetMapping("/admin/flights/{flightId}/bookings")
+    public List<Map<String, Object>> flightBookings(@PathVariable int flightId, HttpSession session) {
+        requireAdmin(session);
+        return jdbc.queryForList("EXEC usp_AdminGetFlightBookings ?", flightId);
+    }
+    @GetMapping("/admin/flights/{flightId}/targets")
+    public List<Map<String, Object>> targetFlights(@PathVariable int flightId, HttpSession session) {
+        requireAdmin(session);
+        return readable(jdbc.queryForList("EXEC usp_AdminGetTargetFlights ?", flightId));
+    }
+    @PostMapping("/admin/reallocate")
+    public Map<String, Object> reallocate(@RequestBody Map<String, String> body, HttpSession session) {
+        String adminEmail = String.valueOf(currentUser(session).get("Email"));
+        requireAdmin(session);
+        return jdbc.queryForMap("EXEC usp_AdminReallocate ?, ?, ?, ?, ?",
+            Integer.parseInt(body.get("fromFlightId")), Integer.parseInt(body.get("toFlightId")),
+            body.getOrDefault("bookingIds", ""), body.getOrDefault("reason", ""), adminEmail);
+    }
+    @GetMapping("/admin/reallocations")
+    public List<Map<String, Object>> reallocations(HttpSession session) {
+        requireAdmin(session);
+        return readable(jdbc.queryForList("EXEC usp_AdminGetReallocations"));
+    }
     @SuppressWarnings("unchecked")
     private Map<String, Object> currentUser(HttpSession session) {
         Map<String, Object> user = (Map<String, Object>) session.getAttribute("user");
@@ -88,6 +130,10 @@ public class ServiceController {
             value instanceof Timestamp timestamp ? timestamp.toLocalDateTime().toString() : value));
         return rows;
     }
+    private Map<String, Object> readableRow(Map<String, Object> row) {
+        row.replaceAll((column, value) -> value instanceof Timestamp timestamp ? timestamp.toLocalDateTime().toString() : value);
+        return row;
+    }
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<Map<String, String>> handleDatabaseError(DataAccessException exception) {
         return ResponseEntity.badRequest()
@@ -96,5 +142,9 @@ public class ServiceController {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> handleStatusError(ResponseStatusException exception) {
         return ResponseEntity.status(exception.getStatusCode()).body(Map.of("error", String.valueOf(exception.getReason())));
+    }
+    @ExceptionHandler({NumberFormatException.class, DateTimeParseException.class})
+    public ResponseEntity<Map<String, String>> handleBadInput(RuntimeException exception) {
+        return ResponseEntity.badRequest().body(Map.of("error", "Please check the values you entered (a number or date is not valid)."));
     }
 }

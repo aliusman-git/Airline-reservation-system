@@ -146,6 +146,14 @@ textarea:focus{outline:2px solid var(--primary)}
 .claimbox .head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14px}
 .admin-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .admin-row input{flex:1;min-width:120px}
+
+#message{z-index:9999;top:84px;max-width:min(440px,calc(100vw - 24px));line-height:1.35}
+.form-error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-left:5px solid #dc2626;border-radius:10px;padding:10px 14px;margin:10px 0;font-size:14px;font-weight:600;text-align:left}
+.form-ok{background:#dcfce7;color:#166534;border:1px solid #86efac;border-left:5px solid #16a34a;border-radius:10px;padding:10px 14px;margin:10px 0;font-size:14px;font-weight:600}
+input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0 0 3px #dc262633 !important}
+.stars.bad{outline:2px solid #dc2626;border-radius:10px;outline-offset:3px}
+.counter{display:block;text-align:right;color:#64748b;font-size:12px}
+.counter.bad{color:#b91c1c;font-weight:700}
 </style>
 </head>
 <body>
@@ -178,6 +186,7 @@ textarea:focus{outline:2px solid var(--primary)}
       <li id="rule-number">A number (0-9)</li>
       <li id="rule-special">A special character (@ # $ ! %)</li>
     </ul>
+    <div id="authError" class="form-error hidden" role="alert"></div>
     <button id="loginButton" onclick="login()">Login</button>
     <button id="registerButton" class="hidden" onclick="registerAccount()">Create account</button>
   </section>
@@ -225,9 +234,9 @@ textarea:focus{outline:2px solid var(--primary)}
       <div id="seats"></div>
       <p id="selection"></p>
       <div class="summary">
-        <strong>&#129523; Baggage</strong> <select id="bagSelect" onchange="updateBagFee()"><option value="0">No checked bags</option></select>
+        <strong>&#129523; Baggage</strong> <input id="bagSelect" type="number" min="0" max="40" step="1" value="0" style="width:90px" oninput="updateBagFee()"> kg
         <div id="bagFeeText" class="note"></div>
-        <small>1 free checked bag per passenger, PKR 3,000 for each extra bag (up to 3 bags per passenger). The fee is added to your payment below.</small>
+        <small>20 kg free per passenger, PKR 500 for each extra kg, up to 40 kg per passenger. Each bag can weigh up to 23 kg, so heavier baggage is split into several bags with their own tags. The fee is added to your payment.</small>
       </div>
       <button onclick="openPayment()">Continue to payment</button>
     </section>
@@ -280,13 +289,6 @@ textarea:focus{outline:2px solid var(--primary)}
     </div>
     <div id="tab-baggage" class="hidden">
     <section class="card">
-      <h2>&#129523; Add baggage</h2>
-      <p class="note">1 free checked bag per passenger. Each extra bag costs PKR 3,000 (maximum 3 bags per passenger). Every bag gets a tag number. You can choose baggage while booking, and it is paid together with your ticket. Bags added here later are paid at the airport counter.</p>
-      <select id="bagBooking"></select>
-      <select id="bagCount"><option value="1">1 bag</option><option value="2">2 bags</option><option value="3">3 bags</option></select>
-      <button onclick="addBaggage()">Add baggage</button>
-    </section>
-    <section class="card">
       <h2>&#127991; My bags</h2>
       <table><tbody id="bagList"></tbody></table>
     </section>
@@ -312,7 +314,9 @@ textarea:focus{outline:2px solid var(--primary)}
         <label class="field">Category<select id="fbCategory"><option>Booking</option><option>Payment</option><option>Flight</option><option>Baggage</option><option>Website</option><option>Other</option></select></label>
         <label class="field">About booking (optional)<select id="fbBooking"></select></label>
       </div>
-      <label class="field">Your comment<textarea id="fbComment" maxlength="1000" placeholder="Tell us what went well or what we can improve"></textarea></label>
+      <label class="field">Your comment<textarea id="fbComment" maxlength="1000" placeholder="Tell us what went well or what we can improve" oninput="updateFbCount()"></textarea><span id="fbCount" class="counter">0 / 1000 (minimum 5 characters)</span></label>
+      <div id="fbError" class="form-error hidden" role="alert"></div>
+      <div id="fbStatus" class="form-ok hidden"></div>
       <button onclick="submitFeedback()">Send feedback</button>
     </section>
     <section class="card">
@@ -347,7 +351,8 @@ function notify(text, isError) {
   box.textContent = text;
   box.style.background = isError ? '#d64545' : '#2e9e5b';
   box.style.display = 'block';
-  setTimeout(() => box.style.display = 'none', 3500);
+  clearTimeout(window.toastTimer);
+  window.toastTimer = setTimeout(() => box.style.display = 'none', isError ? 7000 : 4500);
 }
 async function api(path, method = 'GET', body) {
   const response = await fetch('/api' + path, {
@@ -373,18 +378,49 @@ function showUser(user) {
   }
   else { byId('password').value = ''; byId('confirmPassword').value = ''; showTab('login'); byId('navtab-payment').classList.add('hidden'); applyRole(false); showMainTab('book'); }
 }
-const login = () => run(async () => {
-  showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
+function showFormError(boxId, message, fieldId) {
+  const box = byId(boxId);
+  box.textContent = message;
+  box.classList.remove('hidden');
+  if (fieldId) { byId(fieldId).classList.add('bad'); byId(fieldId).focus(); }
+  box.scrollIntoView({behavior: 'smooth', block: 'center'});
+  notify(message, true);
+}
+function clearFormError(boxId) {
+  byId(boxId).classList.add('hidden');
+  byId(boxId).textContent = '';
+}
+document.addEventListener('input', event => {
+  event.target.classList.remove('bad');
+  if (event.target.closest('#authSection')) clearFormError('authError');
+  if (event.target.closest('#tab-feedback')) clearFormError('fbError');
 });
-const registerAccount = () => run(async () => {
-  const passwordProblem = checkPassword(byId('password').value);
-  if (passwordProblem) throw new Error(passwordProblem);
-  if (byId('password').value !== byId('confirmPassword').value) throw new Error('Passwords do not match.');
-  await api('/register', 'POST', {fullName: byId('fullName').value, phone: byId('phone').value,
-    email: byId('email').value, password: byId('password').value});
-  notify('Account created. Logging you in...');
-  await login();
-});
+const friendlyAuthError = message =>
+  /already registered/i.test(message) && /email/i.test(message) ? message + ' Use the Login tab, or try a different email.' : message;
+const login = async () => {
+  clearFormError('authError');
+  try {
+    if (!byId('email').value.trim()) return showFormError('authError', 'Please enter your email.', 'email');
+    if (!byId('password').value) return showFormError('authError', 'Please enter your password.', 'password');
+    showUser(await api('/login', 'POST', {email: byId('email').value, password: byId('password').value}));
+  } catch (error) { showFormError('authError', friendlyAuthError(error.message)); }
+};
+const registerAccount = async () => {
+  clearFormError('authError');
+  try {
+    if (byId('fullName').value.trim().length < 2) return showFormError('authError', 'Please enter your full name.', 'fullName');
+    if (!/^\S+@\S+\.\S+$/.test(byId('email').value.trim())) return showFormError('authError', 'Please enter a valid email address.', 'email');
+    const phoneDigits = byId('phone').value.replace(/\D/g, '');
+    if (phoneDigits.length < 10 || phoneDigits.length > 15) return showFormError('authError', 'Please enter a valid phone number (10 to 15 digits).', 'phone');
+    const passwordProblem = checkPassword(byId('password').value);
+    if (passwordProblem) return showFormError('authError', passwordProblem, 'password');
+    if (byId('password').value !== byId('confirmPassword').value) return showFormError('authError', 'Passwords do not match.', 'confirmPassword');
+    await api('/register', 'POST', {fullName: byId('fullName').value, phone: byId('phone').value,
+      email: byId('email').value, password: byId('password').value});
+    notify('Account created. Logging you in...');
+    await login();
+  } catch (error) { showFormError('authError', friendlyAuthError(error.message)); }
+};
 const logout = () => run(async () => { await api('/logout', 'POST'); showUser(null); });
 const loadAirports = () => run(async () => {
   const airports = await api('/airports');
@@ -462,20 +498,23 @@ function setChosenSeats(chosen) {
   byId('selection').textContent = chosen.length ? `${chosen.length === 1 ? 'Seat' : 'Seats'} ${chosen.join(', ')} - PKR ${total}` : '';
   renderBagOptions();
 }
-const bagFeeFor = (bags, seats) => Math.max(0, bags - seats) * 3000;
+const bagFeeFor = (kg, seats) => Math.max(0, kg - seats * 20) * 500;
+const bagCountFor = kg => Math.ceil(kg / 23);
 function renderBagOptions() {
   const seats = selectedSeat ? selectedSeat.split(',').length : 0;
   const box = byId('bagSelect');
-  const keep = Number(box.value) || 0;
-  box.innerHTML = Array.from({length: seats * 3 + 1}, (_, n) => `<option value="${n}">${n === 0 ? 'No checked bags' : n + (n === 1 ? ' bag' : ' bags')}</option>`).join('');
-  box.value = String(Math.min(keep, seats * 3));
+  box.max = String(seats * 40);
+  if ((Number(box.value) || 0) > seats * 40) box.value = String(seats * 40);
   box.disabled = seats === 0;
   updateBagFee();
 }
 function updateBagFee() {
   const seats = selectedSeat ? selectedSeat.split(',').length : 0;
-  const fee = bagFeeFor(Number(byId('bagSelect').value) || 0, seats);
-  byId('bagFeeText').textContent = seats ? `Baggage fee: PKR ${fee.toLocaleString()}` : 'Choose your seats first.';
+  let kg = Math.floor(Number(byId('bagSelect').value) || 0);
+  if (kg < 0) kg = 0;
+  if (kg > seats * 40) { kg = seats * 40; byId('bagSelect').value = String(kg); }
+  const fee = bagFeeFor(kg, seats);
+  byId('bagFeeText').textContent = seats ? `${kg} kg (${bagCountFor(kg)} bag${bagCountFor(kg) === 1 ? '' : 's'}) - free allowance ${seats * 20} kg - baggage fee: PKR ${fee.toLocaleString()}` : 'Choose your seats first.';
 }
 const findGroupSeats = () => run(async () => {
   const options = await api(`/flights/${selectedFlightId}/group-seats?size=${byId('groupSize').value}&seatClass=${byId('groupClass').value}`);
@@ -508,11 +547,11 @@ function formatExpiry(box) {
 function openPayment() {
   if (!selectedSeat) { notify('Please click a seat first.', true); return; }
   const seatCount = selectedSeat.split(',').length;
-  const bags = Number(byId('bagSelect').value) || 0;
+  const kg = Math.max(0, Math.floor(Number(byId('bagSelect').value) || 0));
   const fare = chosenTotal();
-  const bagFee = bagFeeFor(bags, seatCount);
+  const bagFee = bagFeeFor(kg, seatCount);
   const total = fare + bagFee;
-  byId('paymentSummary').innerHTML = `Flight <strong>${selectedFlightNumber}</strong> - ${seatCount === 1 ? 'Seat' : 'Seats'} <strong>${selectedSeat.replaceAll(',', ', ')}</strong><br>Tickets: PKR ${fare.toLocaleString()}<br>Baggage: ${bags} bag${bags === 1 ? '' : 's'} - PKR ${bagFee.toLocaleString()}<br>Total to pay: <strong>PKR ${total.toLocaleString()}</strong>`;
+  byId('paymentSummary').innerHTML = `Flight <strong>${selectedFlightNumber}</strong> - ${seatCount === 1 ? 'Seat' : 'Seats'} <strong>${selectedSeat.replaceAll(',', ', ')}</strong><br>Tickets: PKR ${fare.toLocaleString()}<br>Baggage: ${kg} kg - PKR ${bagFee.toLocaleString()}<br>Total to pay: <strong>PKR ${total.toLocaleString()}</strong>`;
   byId('payButton').textContent = `Pay PKR ${total.toLocaleString()}`;
   setPaymentMethod(paymentMethod);
   byId('navtab-payment').classList.remove('hidden');
@@ -555,11 +594,11 @@ const confirmBooking = () => run(async () => {
   if (!selectedSeat) throw new Error('Please click a seat first.');
   const details = readPaymentDetails();
   const ticket = await api(selectedSeat.includes(',') ? '/bookings/group' : '/bookings', 'POST', {flightId: String(selectedFlightId),
-    seatNumber: selectedSeat, seatNumbers: selectedSeat, paymentMethod: paymentMethod, bagCount: byId('bagSelect').value, payerName: details.payerName, accountMask: details.accountMask});
+    seatNumber: selectedSeat, seatNumbers: selectedSeat, paymentMethod: paymentMethod, baggageKg: String(Math.max(0, Math.floor(Number(byId('bagSelect').value) || 0))), payerName: details.payerName, accountMask: details.accountMask});
   ['cardNumber', 'cardExpiry', 'cardCvv', 'walletNumber', 'walletPin', 'bankAccount'].forEach(id => byId(id).value = '');
   byId('acceptTerms').checked = false;
   byId('bagSelect').value = '0';
-  notify(`Paid PKR ${ticket.Price}${ticket.BagCount ? ' (incl. ' + ticket.BagCount + ' bag' + (ticket.BagCount > 1 ? 's' : '') + ', baggage PKR ' + ticket.BaggageFee + ')' : ''} by ${ticket.PaymentMethod} (${ticket.AccountMask}). Receipt for ${byId('receiptEmail').value.trim()}. Ref: ${ticket.PaymentReference}`);
+  notify(`Paid PKR ${ticket.Price}${ticket.BaggageKg ? ' (incl. ' + ticket.BaggageKg + ' kg baggage, PKR ' + ticket.BaggageFee + ')' : ''} by ${ticket.PaymentMethod} (${ticket.AccountMask}). Receipt for ${byId('receiptEmail').value.trim()}. Ref: ${ticket.PaymentReference}`);
   byId('navtab-payment').classList.add('hidden');
   byId('seatCard').classList.add('hidden');
   searchFlights();
@@ -582,6 +621,7 @@ const cancelBooking = (bookingId, expectedRefund) => run(async () => {
   loadBookings();
 });
 function showTab(tabName) {
+  clearFormError('authError');
   const registering = tabName === 'register';
   byId('confirmPassword').classList.toggle('hidden', !registering);
   byId('passwordRules').classList.toggle('hidden', !registering);
@@ -637,21 +677,13 @@ async function bookingOptions(selectId, confirmedOnly, emptyLabel) {
     list.map(b => `<option value="${b.BookingID}">#${b.BookingID} - ${esc(b.FlightNumber)} (${esc(b.OriginCode)} to ${esc(b.DestinationCode)}), seats ${esc(b.SeatNumber)}</option>`).join('');
   if (!list.length && !emptyLabel) byId(selectId).innerHTML = '<option value="">No confirmed bookings</option>';
 }
-const addBaggage = () => run(async () => {
-  const bookingId = byId('bagBooking').value;
-  if (!bookingId) throw new Error('You need a confirmed booking first.');
-  const result = await api('/baggage', 'POST', {bookingId, bagCount: byId('bagCount').value});
-  notify(`${result.BagsAdded} bag(s) added. Baggage fee: PKR ${result.TotalFee}`);
-  loadBaggage();
-});
 let claimBagId = null;
 const loadBaggage = () => run(async () => {
-  await bookingOptions('bagBooking', true);
   const bags = await api('/baggage/mine');
   byId('bagList').innerHTML = bags.length === 0 ? '<tr><td>No bags yet. Add baggage to a booking above.</td></tr>'
-    : '<tr><th>Tag</th><th>Flight</th><th>Route</th><th>Fee</th><th>Bag status</th><th>Claim</th><th></th></tr>' +
+    : '<tr><th>Tag</th><th>Flight</th><th>Route</th><th>Weight</th><th>Fee</th><th>Bag status</th><th>Claim</th><th></th></tr>' +
       bags.map(b => `<tr><td><strong>${esc(b.TagNumber)}</strong></td><td>${esc(b.FlightNumber)}</td><td>${esc(b.OriginCode)} to ${esc(b.DestinationCode)}</td>
-        <td>${b.Fee}</td><td><span class="badge ${cls(b.BagStatus)}">${esc(b.BagStatus)}</span></td>
+        <td>${b.WeightKg} kg</td><td>${b.Fee}</td><td><span class="badge ${cls(b.BagStatus)}">${esc(b.BagStatus)}</span></td>
         <td>${b.ClaimReference ? esc(b.ClaimReference) + ' (' + esc(b.ClaimStatus) + ')' : '-'}</td>
         <td><button class="secondary" onclick="openClaim(${b.BagID}, '${esc(b.TagNumber)}')">Report problem</button></td></tr>`).join('');
   const claims = await api('/claims/mine');
@@ -688,15 +720,36 @@ const loadFeedback = () => run(async () => {
     : '<tr><th>Date</th><th>Rating</th><th>Category</th><th>Comment</th></tr>' +
       items.map(f => `<tr><td>${showTime(f.CreatedAt).slice(0, 16)}</td><td class="rating">${'&#9733;'.repeat(f.Rating)}</td><td>${esc(f.Category)}</td><td>${esc(f.Comment)}</td></tr>`).join('');
 });
-const submitFeedback = () => run(async () => {
-  if (!feedbackRating) throw new Error('Please choose a star rating.');
-  await api('/feedback', 'POST', {rating: String(feedbackRating), category: byId('fbCategory').value,
-    bookingId: byId('fbBooking').value || '0', comment: byId('fbComment').value});
-  notify('Thank you for your feedback!');
-  feedbackRating = 0;
-  byId('fbComment').value = '';
-  loadFeedback();
-});
+function updateFbCount() {
+  const length = byId('fbComment').value.trim().length;
+  byId('fbCount').textContent = `${byId('fbComment').value.length} / 1000 (minimum 5 characters)`;
+  byId('fbCount').classList.toggle('bad', length > 0 && length < 5);
+}
+const submitFeedback = async () => {
+  clearFormError('fbError');
+  byId('fbStatus').classList.add('hidden');
+  byId('stars').classList.remove('bad');
+  try {
+    if (!feedbackRating) {
+      byId('stars').classList.add('bad');
+      return showFormError('fbError', 'Please choose a star rating first (click a star from 1 to 5).');
+    }
+    const comment = byId('fbComment').value.trim();
+    if (comment.length < 5) return showFormError('fbError', `Your comment is too short (${comment.length} characters). Please write at least 5 characters.`, 'fbComment');
+    if (comment.length > 1000) return showFormError('fbError', `Your comment is too long (${comment.length} characters). The limit is 1000.`, 'fbComment');
+    await api('/feedback', 'POST', {rating: String(feedbackRating), category: byId('fbCategory').value,
+      bookingId: byId('fbBooking').value || '0', comment});
+    byId('fbStatus').textContent = 'Thank you! Your feedback was sent.';
+    byId('fbStatus').classList.remove('hidden');
+    notify('Thank you for your feedback!');
+    feedbackRating = 0;
+    byId('fbComment').value = '';
+    updateFbCount();
+    loadFeedback();
+  } catch (error) {
+    showFormError('fbError', 'Feedback not sent: ' + error.message);
+  }
+};
 const claimStatuses = ['Reported', 'Searching', 'Found', 'Delivered', 'Compensation Approved'];
 const loadAdmin = () => run(async () => {
   const claims = await api('/admin/claims');

@@ -22,7 +22,7 @@ public class ServiceController {
     @PostMapping("/baggage")
     public Map<String, Object> addBaggage(@RequestBody Map<String, String> body, HttpSession session) {
         return jdbc.queryForMap("EXEC usp_AddBaggage ?, ?, ?", Integer.parseInt(body.get("bookingId")),
-            passengerId(session), Integer.parseInt(body.get("bagCount")));
+            passengerId(session), Integer.parseInt(body.get("weightKg")));
     }
     @GetMapping("/baggage/mine")
     public List<Map<String, Object>> myBaggage(HttpSession session) {

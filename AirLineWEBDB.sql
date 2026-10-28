@@ -63,6 +63,9 @@ CREATE TABLE Passengers (
     CONSTRAINT CK_Passengers_Email CHECK (Email LIKE '%_@_%._%')
 );
 GO
+-- One phone number can belong to only one account (empty phones are ignored).
+CREATE UNIQUE INDEX UX_Passengers_Phone ON Passengers (Phone) WHERE Phone IS NOT NULL;
+GO
 CREATE UNIQUE INDEX UX_Passengers_User ON Passengers (UserID) WHERE UserID IS NOT NULL;
 GO
 CREATE TABLE Flights (
@@ -158,6 +161,76 @@ GO
 CREATE INDEX IX_Payments_Booking ON Payments (BookingID);
 GO
 
+/* ---- Round 2 tables: baggage, lost-baggage claims, feedback ---- */
+IF OBJECT_ID('Baggage', 'U') IS NULL
+BEGIN
+    CREATE TABLE Baggage (
+        BagID     INT IDENTITY(1,1) NOT NULL,
+        BookingID INT NOT NULL,
+        TagNumber VARCHAR(20) NOT NULL,
+        WeightKg  DECIMAL(5,1) NOT NULL CONSTRAINT DF_Baggage_Weight DEFAULT 0,
+        Fee       DECIMAL(10,2) NOT NULL CONSTRAINT DF_Baggage_Fee DEFAULT 0,
+        Status    VARCHAR(20) NOT NULL CONSTRAINT DF_Baggage_Status DEFAULT 'Checked In',
+        CreatedAt DATETIME2(0) NOT NULL CONSTRAINT DF_Baggage_Created DEFAULT SYSDATETIME(),
+        CONSTRAINT PK_Baggage PRIMARY KEY (BagID),
+        CONSTRAINT UQ_Baggage_Tag UNIQUE (TagNumber),
+        CONSTRAINT FK_Baggage_Booking FOREIGN KEY (BookingID) REFERENCES Bookings(BookingID),
+        CONSTRAINT CK_Baggage_Status CHECK (Status IN ('Checked In', 'Lost', 'Arrived', 'Delivered'))
+    );
+    CREATE INDEX IX_Baggage_Booking ON Baggage (BookingID);
+END
+GO
+IF OBJECT_ID('BaggageClaims', 'U') IS NULL
+BEGIN
+    CREATE TABLE BaggageClaims (
+        ClaimID            INT IDENTITY(1,1) NOT NULL,
+        BagID              INT NOT NULL,
+        PassengerID        INT NOT NULL,
+        ClaimReference     VARCHAR(20) NOT NULL,
+        ClaimType          VARCHAR(20) NOT NULL,
+        Description        VARCHAR(500) NOT NULL,
+        ContactPhone       VARCHAR(20) NOT NULL,
+        Status             VARCHAR(30) NOT NULL CONSTRAINT DF_Claims_Status DEFAULT 'Reported',
+        CompensationAmount DECIMAL(10,2) NULL,
+        CreatedAt          DATETIME2(0) NOT NULL CONSTRAINT DF_Claims_Created DEFAULT SYSDATETIME(),
+        CONSTRAINT PK_BaggageClaims PRIMARY KEY (ClaimID),
+        CONSTRAINT UQ_Claims_Reference UNIQUE (ClaimReference),
+        CONSTRAINT FK_Claims_Bag FOREIGN KEY (BagID) REFERENCES Baggage(BagID),
+        CONSTRAINT FK_Claims_Passenger FOREIGN KEY (PassengerID) REFERENCES Passengers(PassengerID),
+        CONSTRAINT CK_Claims_Type CHECK (ClaimType IN ('Lost', 'Delayed', 'Damaged')),
+        CONSTRAINT CK_Claims_Status CHECK (Status IN ('Reported', 'Searching', 'Found', 'Delivered', 'Compensation Approved'))
+    );
+    CREATE TABLE ClaimUpdates (
+        UpdateID  INT IDENTITY(1,1) NOT NULL,
+        ClaimID   INT NOT NULL,
+        Status    VARCHAR(30) NOT NULL,
+        Note      VARCHAR(300) NOT NULL CONSTRAINT DF_ClaimUpdates_Note DEFAULT '',
+        CreatedAt DATETIME2(0) NOT NULL CONSTRAINT DF_ClaimUpdates_Created DEFAULT SYSDATETIME(),
+        CONSTRAINT PK_ClaimUpdates PRIMARY KEY (UpdateID),
+        CONSTRAINT FK_ClaimUpdates_Claim FOREIGN KEY (ClaimID) REFERENCES BaggageClaims(ClaimID)
+    );
+END
+GO
+IF OBJECT_ID('Feedback', 'U') IS NULL
+BEGIN
+    CREATE TABLE Feedback (
+        FeedbackID  INT IDENTITY(1,1) NOT NULL,
+        PassengerID INT NOT NULL,
+        BookingID   INT NULL,
+        Rating      TINYINT NOT NULL,
+        Category    VARCHAR(30) NOT NULL,
+        Comment     VARCHAR(1000) NOT NULL,
+        CreatedAt   DATETIME2(0) NOT NULL CONSTRAINT DF_Feedback_Created DEFAULT SYSDATETIME(),
+        CONSTRAINT PK_Feedback PRIMARY KEY (FeedbackID),
+        CONSTRAINT FK_Feedback_Passenger FOREIGN KEY (PassengerID) REFERENCES Passengers(PassengerID),
+        CONSTRAINT FK_Feedback_Booking FOREIGN KEY (BookingID) REFERENCES Bookings(BookingID),
+        CONSTRAINT CK_Feedback_Rating CHECK (Rating BETWEEN 1 AND 5),
+        CONSTRAINT CK_Feedback_Category CHECK (Category IN ('Booking', 'Payment', 'Flight', 'Baggage', 'Website', 'Other'))
+    );
+END
+GO
+GO
+
 /* ---------------- PART 2 - Stored procedures ---------------- */
 
 -- Seat map: 6 seats per row (A-F), rows 1-3 Business at 2x price.
@@ -216,6 +289,18 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     SET @Email = LOWER(LTRIM(RTRIM(@Email)));
+    -- Keep digits only, and treat +92300... and 0300... as the same number.
+    DECLARE @Digits VARCHAR(20) = '';
+    DECLARE @i INT = 1;
+    WHILE @i <= LEN(ISNULL(@Phone, ''))
+    BEGIN
+        IF SUBSTRING(@Phone, @i, 1) LIKE '[0-9]' SET @Digits += SUBSTRING(@Phone, @i, 1);
+        SET @i += 1;
+    END;
+    IF LEFT(@Digits, 2) = '92' AND LEN(@Digits) = 12 SET @Digits = '0' + SUBSTRING(@Digits, 3, 20);
+    IF LEN(@Digits) < 10 OR LEN(@Digits) > 15
+        THROW 50023, 'Please enter a valid phone number (10 to 15 digits).', 1;
+    SET @Phone = @Digits;
     IF LEN(@Password) < 8
         THROW 50020, 'Password must be at least 8 characters.', 1;
     IF @Password NOT LIKE '%[A-Z]%' COLLATE Latin1_General_BIN
@@ -225,6 +310,8 @@ BEGIN
         THROW 50022, 'Password needs an uppercase letter, a lowercase letter, a number and a special character.', 1;
     IF EXISTS (SELECT 1 FROM Users WHERE Email = @Email) OR EXISTS (SELECT 1 FROM Passengers WHERE Email = @Email)
         THROW 50021, 'This email is already registered.', 1;
+    IF EXISTS (SELECT 1 FROM Passengers WHERE Phone = @Phone)
+        THROW 50024, 'This phone number is already registered to another account.', 1;
     DECLARE @Salt VARBINARY(16) = CRYPT_GEN_RANDOM(16);
     DECLARE @Hash VARBINARY(32) = HASHBYTES('SHA2_256', @Salt + CONVERT(VARBINARY(200), @Password));
     DECLARE @NewUserID INT, @NewPassengerID INT;
@@ -319,13 +406,13 @@ GO
 -- Book a seat and record the (simulated) payment in the same transaction.
 CREATE OR ALTER PROCEDURE usp_BookFlight
     @PassengerID INT, @FlightID INT, @SeatNumber VARCHAR(10), @PaymentMethod VARCHAR(20) = 'Card',
-    @PayerName VARCHAR(100) = NULL, @AccountMask VARCHAR(8) = NULL
+    @PayerName VARCHAR(100) = NULL, @AccountMask VARCHAR(8) = NULL, @BaggageKg INT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     DECLARE @DepartureTime DATETIME2(0), @FlightStatus VARCHAR(20), @BasePrice DECIMAL(10,2);
-    DECLARE @Multiplier DECIMAL(4,2), @Price DECIMAL(10,2), @NewBookingID INT, @NewTicketID INT, @Reference VARCHAR(30);
+    DECLARE @BagFee DECIMAL(10,2) = 0, @Paid DECIMAL(10,2), @Multiplier DECIMAL(4,2), @Price DECIMAL(10,2), @NewBookingID INT, @NewTicketID INT, @Reference VARCHAR(30);
     SET @SeatNumber = UPPER(LTRIM(RTRIM(@SeatNumber)));
     BEGIN TRY
         BEGIN TRANSACTION;
@@ -335,6 +422,8 @@ BEGIN
             THROW 50049, 'Please enter the payer name.', 1;
         IF @AccountMask IS NULL OR @AccountMask NOT LIKE '****[0-9][0-9][0-9][0-9]'
             THROW 50049, 'Please enter a valid card, account or mobile number.', 1;
+        IF @BaggageKg < 0 OR @BaggageKg > 40
+            THROW 50065, 'Baggage can be 0 to 40 kg per passenger.', 1;
         SELECT @DepartureTime = DepartureTime, @FlightStatus = Status, @BasePrice = BasePrice
         FROM Flights WHERE FlightID = @FlightID;
         IF @FlightStatus IS NULL
@@ -353,16 +442,29 @@ BEGIN
         IF EXISTS (SELECT 1 FROM Bookings WHERE PassengerID = @PassengerID AND FlightID = @FlightID AND Status = 'Confirmed')
             THROW 50045, 'You already have a confirmed booking on this flight.', 1;
         SET @Price = CAST(@BasePrice * @Multiplier AS DECIMAL(10,2));
+        SET @BagFee = CASE WHEN @BaggageKg > 20 THEN (@BaggageKg - 20) * 500 ELSE 0 END;
+        SET @Paid = @Price + @BagFee;
         INSERT INTO Bookings (PassengerID, FlightID, Status) VALUES (@PassengerID, @FlightID, 'Confirmed');
         SET @NewBookingID = SCOPE_IDENTITY();
         INSERT INTO Tickets (BookingID, FlightID, SeatNumber, Price) VALUES (@NewBookingID, @FlightID, @SeatNumber, @Price);
         SET @NewTicketID = SCOPE_IDENTITY();
+        IF @BaggageKg > 0
+        BEGIN
+            ;WITH n AS (SELECT TOP (CAST(CEILING(@BaggageKg / 23.0) AS INT)) CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS INT) AS i FROM sys.all_objects)
+            INSERT INTO Baggage (BookingID, TagNumber, WeightKg, Fee)
+            SELECT @NewBookingID, 'BG' + RIGHT('00000000' + CAST(ABS(CHECKSUM(NEWID())) % 100000000 AS VARCHAR(8)), 8),
+                   c.CumEnd - c.CumStart,
+                   (CASE WHEN c.CumEnd > 1 * 20 THEN c.CumEnd - 1 * 20 ELSE 0 END
+                    - CASE WHEN c.CumStart > 1 * 20 THEN c.CumStart - 1 * 20 ELSE 0 END) * 500
+            FROM n
+            CROSS APPLY (SELECT 23 * (i - 1) AS CumStart, CASE WHEN 23 * i < @BaggageKg THEN 23 * i ELSE @BaggageKg END AS CumEnd) c;
+        END;
         SET @Reference = 'PAY-' + RIGHT(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', ''), 10);
         INSERT INTO Payments (BookingID, Amount, Method, Status, Reference, PayerName, AccountMask)
-        VALUES (@NewBookingID, @Price, @PaymentMethod, 'Paid', @Reference, LTRIM(RTRIM(@PayerName)), @AccountMask);
+        VALUES (@NewBookingID, @Paid, @PaymentMethod, 'Paid', @Reference, LTRIM(RTRIM(@PayerName)), @AccountMask);
         COMMIT TRANSACTION;
         SELECT @NewBookingID AS BookingID, @NewTicketID AS TicketID, @SeatNumber AS SeatNumber,
-               @Price AS Price, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference, @AccountMask AS AccountMask;
+               @Paid AS Price, @Price AS TicketPrice, @BagFee AS BaggageFee, @BaggageKg AS BaggageKg, CAST(CEILING(@BaggageKg / 23.0) AS INT) AS BagCount, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference, @AccountMask AS AccountMask;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
@@ -486,13 +588,14 @@ CREATE OR ALTER PROCEDURE usp_BookGroup
     @SeatNumbers VARCHAR(200),
     @PaymentMethod VARCHAR(20) = 'Card',
     @PayerName VARCHAR(100) = NULL,
-    @AccountMask VARCHAR(8) = NULL
+    @AccountMask VARCHAR(8) = NULL,
+    @BaggageKg INT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     DECLARE @DepartureTime DATETIME2(0), @FlightStatus VARCHAR(20), @BasePrice DECIMAL(10,2);
-    DECLARE @SeatCount INT, @FoundCount INT, @Total DECIMAL(10,2), @NewBookingID INT, @Reference VARCHAR(30);
+    DECLARE @BagFee DECIMAL(10,2) = 0, @Paid DECIMAL(10,2), @SeatCount INT, @FoundCount INT, @Total DECIMAL(10,2), @NewBookingID INT, @Reference VARCHAR(30);
     DECLARE @Wanted TABLE (SeatNumber VARCHAR(10) PRIMARY KEY);
     INSERT INTO @Wanted
     SELECT DISTINCT UPPER(LTRIM(RTRIM(value))) FROM STRING_SPLIT(@SeatNumbers, ',') WHERE LTRIM(RTRIM(value)) <> '';
@@ -507,6 +610,8 @@ BEGIN
             THROW 50049, 'Please enter a valid card, account or mobile number.', 1;
         IF @SeatCount < 2 OR @SeatCount > 6
             THROW 50047, 'A group booking needs 2 to 6 seats.', 1;
+        IF @BaggageKg < 0 OR @BaggageKg > @SeatCount * 40
+            THROW 50065, 'Baggage can be 0 to 40 kg per passenger.', 1;
         SELECT @DepartureTime = DepartureTime, @FlightStatus = Status, @BasePrice = BasePrice
         FROM Flights WHERE FlightID = @FlightID;
         IF @FlightStatus IS NULL
@@ -531,13 +636,26 @@ BEGIN
         FROM Seats s JOIN @Wanted w ON w.SeatNumber = s.SeatNumber
         WHERE s.FlightID = @FlightID;
         SELECT @Total = SUM(Price) FROM Tickets WHERE BookingID = @NewBookingID;
+        SET @BagFee = CASE WHEN @BaggageKg > @SeatCount * 20 THEN (@BaggageKg - @SeatCount * 20) * 500 ELSE 0 END;
+        SET @Paid = @Total + @BagFee;
+        IF @BaggageKg > 0
+        BEGIN
+            ;WITH n AS (SELECT TOP (CAST(CEILING(@BaggageKg / 23.0) AS INT)) CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS INT) AS i FROM sys.all_objects)
+            INSERT INTO Baggage (BookingID, TagNumber, WeightKg, Fee)
+            SELECT @NewBookingID, 'BG' + RIGHT('00000000' + CAST(ABS(CHECKSUM(NEWID())) % 100000000 AS VARCHAR(8)), 8),
+                   c.CumEnd - c.CumStart,
+                   (CASE WHEN c.CumEnd > @SeatCount * 20 THEN c.CumEnd - @SeatCount * 20 ELSE 0 END
+                    - CASE WHEN c.CumStart > @SeatCount * 20 THEN c.CumStart - @SeatCount * 20 ELSE 0 END) * 500
+            FROM n
+            CROSS APPLY (SELECT 23 * (i - 1) AS CumStart, CASE WHEN 23 * i < @BaggageKg THEN 23 * i ELSE @BaggageKg END AS CumEnd) c;
+        END;
         SET @Reference = 'PAY-' + RIGHT(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', ''), 10);
         INSERT INTO Payments (BookingID, Amount, Method, Status, Reference, PayerName, AccountMask)
-        VALUES (@NewBookingID, @Total, @PaymentMethod, 'Paid', @Reference, LTRIM(RTRIM(@PayerName)), @AccountMask);
+        VALUES (@NewBookingID, @Paid, @PaymentMethod, 'Paid', @Reference, LTRIM(RTRIM(@PayerName)), @AccountMask);
         COMMIT TRANSACTION;
         SELECT @NewBookingID AS BookingID,
                (SELECT STRING_AGG(SeatNumber, ', ') WITHIN GROUP (ORDER BY SeatNumber) FROM @Wanted) AS SeatNumber,
-               @Total AS Price, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference, @AccountMask AS AccountMask;
+               @Paid AS Price, @Total AS TicketPrice, @BagFee AS BaggageFee, @BaggageKg AS BaggageKg, CAST(CEILING(@BaggageKg / 23.0) AS INT) AS BagCount, @PaymentMethod AS PaymentMethod, @Reference AS PaymentReference, @AccountMask AS AccountMask;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
@@ -558,6 +676,148 @@ BEGIN
     FROM Seats s
     JOIN Flights f ON f.FlightID = s.FlightID
     WHERE s.FlightID = @FlightID;
+END;
+GO
+
+/* ---- Round 2 procedures: baggage, claims, feedback ---- */
+-- Baggage: 1 free bag per passenger, extra bags PKR 3,000 each, maximum 3 bags per passenger.
+CREATE OR ALTER PROCEDURE usp_AddBaggage
+    @BookingID INT, @PassengerID INT, @WeightKg INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @Owner INT, @BookingStatus VARCHAR(20), @DepartureTime DATETIME2(0), @Seats INT, @Existing INT, @Fee DECIMAL(10,2);
+    SELECT @Owner = b.PassengerID, @BookingStatus = b.Status, @DepartureTime = f.DepartureTime
+    FROM Bookings b JOIN Flights f ON f.FlightID = b.FlightID WHERE b.BookingID = @BookingID;
+    IF @Owner IS NULL OR @Owner <> @PassengerID THROW 50060, 'Booking not found.', 1;
+    IF @BookingStatus <> 'Confirmed' THROW 50061, 'Baggage can only be added to a confirmed booking.', 1;
+    IF @DepartureTime <= SYSDATETIME() THROW 50062, 'This flight has already departed.', 1;
+    IF @WeightKg < 1 THROW 50063, 'Enter the baggage weight in kg.', 1;
+    SELECT @Seats = COUNT(*) FROM Tickets WHERE BookingID = @BookingID AND Status = 'Active';
+    SELECT @Existing = CAST(ISNULL(SUM(WeightKg), 0) AS INT) FROM Baggage WHERE BookingID = @BookingID;
+    IF @Existing + @WeightKg > @Seats * 40 THROW 50064, 'Maximum 40 kg of baggage per passenger.', 1;
+    SET @Fee = (CASE WHEN @Existing + @WeightKg > @Seats * 20 THEN @Existing + @WeightKg - @Seats * 20 ELSE 0 END
+              - CASE WHEN @Existing > @Seats * 20 THEN @Existing - @Seats * 20 ELSE 0 END) * 500;
+    ;WITH n AS (SELECT TOP (CAST(CEILING(@WeightKg / 23.0) AS INT)) CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS INT) AS i FROM sys.all_objects)
+    INSERT INTO Baggage (BookingID, TagNumber, WeightKg, Fee)
+    SELECT @BookingID, 'BG' + RIGHT('00000000' + CAST(ABS(CHECKSUM(NEWID())) % 100000000 AS VARCHAR(8)), 8),
+           c.CumEnd - c.CumStart,
+           (CASE WHEN @Existing + c.CumEnd > @Seats * 20 THEN @Existing + c.CumEnd - @Seats * 20 ELSE 0 END
+            - CASE WHEN @Existing + c.CumStart > @Seats * 20 THEN @Existing + c.CumStart - @Seats * 20 ELSE 0 END) * 500
+    FROM n
+    CROSS APPLY (SELECT 23 * (i - 1) AS CumStart, CASE WHEN 23 * i < @WeightKg THEN 23 * i ELSE @WeightKg END AS CumEnd) c;
+    SELECT CAST(CEILING(@WeightKg / 23.0) AS INT) AS BagsAdded, @WeightKg AS WeightKg, @Fee AS TotalFee;
+END;
+GO
+CREATE OR ALTER PROCEDURE usp_GetBaggage
+    @PassengerID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT g.BagID, g.TagNumber, g.WeightKg, g.Fee, g.Status AS BagStatus, b.BookingID, f.FlightNumber, f.OriginCode, f.DestinationCode,
+           f.DepartureTime, c.ClaimReference, c.Status AS ClaimStatus
+    FROM Baggage g
+    JOIN Bookings b ON b.BookingID = g.BookingID
+    JOIN Flights f ON f.FlightID = b.FlightID
+    OUTER APPLY (SELECT TOP 1 ClaimReference, Status FROM BaggageClaims WHERE BagID = g.BagID ORDER BY ClaimID DESC) c
+    WHERE b.PassengerID = @PassengerID AND b.Status = 'Confirmed'
+    ORDER BY g.BagID DESC;
+END;
+GO
+-- Report a lost, delayed or damaged bag. (Demo: reporting is allowed at any time so you can test it.)
+CREATE OR ALTER PROCEDURE usp_ReportBaggageIssue
+    @BagID INT, @PassengerID INT, @ClaimType VARCHAR(20), @Description VARCHAR(500), @ContactPhone VARCHAR(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @Owner INT, @Reference VARCHAR(20), @ClaimID INT;
+    SELECT @Owner = b.PassengerID FROM Baggage g JOIN Bookings b ON b.BookingID = g.BookingID WHERE g.BagID = @BagID;
+    IF @Owner IS NULL OR @Owner <> @PassengerID THROW 50070, 'Bag not found.', 1;
+    IF @ClaimType NOT IN ('Lost', 'Delayed', 'Damaged') THROW 50071, 'Choose Lost, Delayed or Damaged.', 1;
+    IF LEN(LTRIM(RTRIM(ISNULL(@Description, '')))) < 10 THROW 50072, 'Please describe the problem (at least 10 characters).', 1;
+    IF LEN(LTRIM(RTRIM(ISNULL(@ContactPhone, '')))) < 7 THROW 50073, 'Please enter a contact phone number.', 1;
+    IF EXISTS (SELECT 1 FROM BaggageClaims WHERE BagID = @BagID AND Status NOT IN ('Delivered', 'Compensation Approved'))
+        THROW 50074, 'This bag already has an open claim.', 1;
+    SET @Reference = 'LC-' + RIGHT('000000' + CAST(ABS(CHECKSUM(NEWID())) % 1000000 AS VARCHAR(6)), 6);
+    BEGIN TRANSACTION;
+    INSERT INTO BaggageClaims (BagID, PassengerID, ClaimReference, ClaimType, Description, ContactPhone)
+    VALUES (@BagID, @PassengerID, @Reference, @ClaimType, LTRIM(RTRIM(@Description)), LTRIM(RTRIM(@ContactPhone)));
+    SET @ClaimID = SCOPE_IDENTITY();
+    INSERT INTO ClaimUpdates (ClaimID, Status, Note) VALUES (@ClaimID, 'Reported', 'Claim received. We will start searching for your bag.');
+    IF @ClaimType = 'Lost' UPDATE Baggage SET Status = 'Lost' WHERE BagID = @BagID;
+    COMMIT TRANSACTION;
+    SELECT @Reference AS ClaimReference;
+END;
+GO
+-- @PassengerID = 0 returns every claim (used by the admin page only).
+CREATE OR ALTER PROCEDURE usp_GetClaims
+    @PassengerID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT c.ClaimID, c.ClaimReference, c.ClaimType, c.Status, c.Description, c.ContactPhone, c.CompensationAmount, c.CreatedAt,
+           g.TagNumber, f.FlightNumber, p.FullName,
+           (SELECT STRING_AGG(CONCAT(CONVERT(VARCHAR(16), u.CreatedAt, 120), ' - ', u.Status,
+                   CASE WHEN u.Note <> '' THEN ': ' + u.Note ELSE '' END), '|') WITHIN GROUP (ORDER BY u.UpdateID)
+            FROM ClaimUpdates u WHERE u.ClaimID = c.ClaimID) AS Timeline
+    FROM BaggageClaims c
+    JOIN Baggage g ON g.BagID = c.BagID
+    JOIN Bookings b ON b.BookingID = g.BookingID
+    JOIN Flights f ON f.FlightID = b.FlightID
+    JOIN Passengers p ON p.PassengerID = c.PassengerID
+    WHERE @PassengerID = 0 OR c.PassengerID = @PassengerID
+    ORDER BY c.ClaimID DESC;
+END;
+GO
+CREATE OR ALTER PROCEDURE usp_AdminUpdateClaim
+    @ClaimID INT, @Status VARCHAR(30), @Note VARCHAR(300) = '', @Amount DECIMAL(10,2) = 0
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF NOT EXISTS (SELECT 1 FROM BaggageClaims WHERE ClaimID = @ClaimID) THROW 50075, 'Claim not found.', 1;
+    IF @Status NOT IN ('Reported', 'Searching', 'Found', 'Delivered', 'Compensation Approved') THROW 50076, 'Invalid claim status.', 1;
+    IF @Status = 'Compensation Approved' AND @Amount <= 0 THROW 50077, 'Enter the compensation amount.', 1;
+    BEGIN TRANSACTION;
+    UPDATE BaggageClaims
+    SET Status = @Status,
+        CompensationAmount = CASE WHEN @Status = 'Compensation Approved' THEN @Amount ELSE CompensationAmount END
+    WHERE ClaimID = @ClaimID;
+    INSERT INTO ClaimUpdates (ClaimID, Status, Note) VALUES (@ClaimID, @Status, LEFT(LTRIM(RTRIM(ISNULL(@Note, ''))), 300));
+    UPDATE Baggage
+    SET Status = CASE WHEN @Status = 'Found' THEN 'Arrived' WHEN @Status = 'Delivered' THEN 'Delivered' ELSE Status END
+    WHERE BagID = (SELECT BagID FROM BaggageClaims WHERE ClaimID = @ClaimID);
+    COMMIT TRANSACTION;
+    SELECT @ClaimID AS ClaimID, @Status AS Status;
+END;
+GO
+CREATE OR ALTER PROCEDURE usp_AddFeedback
+    @PassengerID INT, @BookingID INT, @Rating INT, @Category VARCHAR(30), @Comment VARCHAR(1000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF @Rating < 1 OR @Rating > 5 THROW 50080, 'Please choose a rating from 1 to 5 stars.', 1;
+    IF @Category NOT IN ('Booking', 'Payment', 'Flight', 'Baggage', 'Website', 'Other') THROW 50081, 'Please choose a category.', 1;
+    IF LEN(LTRIM(RTRIM(ISNULL(@Comment, '')))) < 5 THROW 50082, 'Please write a short comment (at least 5 characters).', 1;
+    IF @BookingID > 0 AND NOT EXISTS (SELECT 1 FROM Bookings WHERE BookingID = @BookingID AND PassengerID = @PassengerID)
+        THROW 50083, 'Booking not found.', 1;
+    INSERT INTO Feedback (PassengerID, BookingID, Rating, Category, Comment)
+    VALUES (@PassengerID, NULLIF(@BookingID, 0), @Rating, @Category, LTRIM(RTRIM(@Comment)));
+    SELECT SCOPE_IDENTITY() AS FeedbackID;
+END;
+GO
+-- @PassengerID = 0 returns all feedback (admin page only).
+CREATE OR ALTER PROCEDURE usp_GetFeedback
+    @PassengerID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT f.FeedbackID, p.FullName, f.BookingID, f.Rating, f.Category, f.Comment, f.CreatedAt
+    FROM Feedback f JOIN Passengers p ON p.PassengerID = f.PassengerID
+    WHERE @PassengerID = 0 OR f.PassengerID = @PassengerID
+    ORDER BY f.FeedbackID DESC;
 END;
 GO
 

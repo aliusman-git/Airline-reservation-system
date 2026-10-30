@@ -239,6 +239,9 @@ textarea:focus{outline:2px solid var(--primary)}
 .bt-claim{background:#fff0f7;border-left:4px solid var(--accent);padding:6px 10px;font-size:12px;margin-bottom:10px;border-radius:0 8px 8px 0;color:var(--primary)}
 .bag-tag button{width:100%;margin:4px 0 0}
 .timeline{list-style:none;margin:10px 0 0 6px;padding:0;border-left:2px solid var(--soft);font-size:13px;color:#475569}
+.comp-banner{background:#fff0f7;border-left:4px solid var(--accent);color:var(--primary);padding:8px 12px;border-radius:0 8px 8px 0;margin:10px 0 4px}
+.stepper.hidden{display:none}
+.comp{background:#fff0f7;color:#be185d;border:1px solid var(--accent);border-radius:999px;padding:1px 10px;white-space:nowrap}
 .timeline li{position:relative;padding:2px 0 8px 18px}
 .timeline li::before{content:'';position:absolute;left:-7px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 0 0 1px var(--accent)}
 .stars button{font-size:32px;border-radius:12px}
@@ -938,6 +941,7 @@ async function bookingOptions(selectId, confirmedOnly, emptyLabel) {
   if (!list.length && !emptyLabel) byId(selectId).innerHTML = '<option value="">No confirmed bookings</option>';
 }
 let claimBagId = null;
+const timelineItem = text => '<li>' + esc(text).replace(/(Compensation: PKR [\d,]+)/, '<strong class="comp">$1</strong>') + '</li>';
 const loadBaggage = () => run(async () => {
   const bags = await api('/baggage/mine');
   byId('bagList').innerHTML = bags.length === 0
@@ -951,8 +955,8 @@ const loadBaggage = () => run(async () => {
   byId('claimList').innerHTML = claims.length === 0 ? '<p class="note">No claims. If a bag is lost, delayed or damaged, use Report problem above.</p>'
     : claims.map(c => `<div class="claimbox"><div class="head"><span><strong>${esc(c.ClaimReference)}</strong> - ${esc(c.ClaimType)} bag ${esc(c.TagNumber)} (${esc(c.FlightNumber)})</span>
         <span class="badge ${cls(c.Status)}">${esc(c.Status)}</span></div>
-        ${c.CompensationAmount ? `<div>Compensation approved: <strong>PKR ${c.CompensationAmount}</strong></div>` : ''}
-        <ul class="timeline">${String(c.Timeline ?? '').split('|').map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>`).join('');
+        ${c.CompensationAmount ? `<div class="comp-banner">Compensation amount: <strong>PKR ${Number(c.CompensationAmount).toLocaleString('en-US')}</strong></div>` : ''}
+        <ul class="timeline">${String(c.Timeline ?? '').split('|').map(timelineItem).join('')}</ul></div>`).join('');
 });
 function openClaim(bagId, tag) {
   claimBagId = bagId;
@@ -1144,11 +1148,11 @@ const loadAdmin = () => run(async () => {
     : claims.map(c => `<div class="claimbox"><div class="head"><span><strong>${esc(c.ClaimReference)}</strong> - ${esc(c.ClaimType)} - bag ${esc(c.TagNumber)} - ${esc(c.FlightNumber)} - ${esc(c.FullName)}</span>
         <span class="badge ${cls(c.Status)}">${esc(c.Status)}</span></div>
         <div class="note">${esc(c.Description)} (phone ${esc(c.ContactPhone)})</div>
-        <ul class="timeline">${String(c.Timeline ?? '').split('|').map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+        <ul class="timeline">${String(c.Timeline ?? '').split('|').map(timelineItem).join('')}</ul>
         <div class="admin-row">
           <select id="st-${c.ClaimID}">${claimStatuses.map(x => `<option ${x === c.Status ? 'selected' : ''}>${x}</option>`).join('')}</select>
           <input id="nt-${c.ClaimID}" placeholder="Note for the passenger">
-          <input id="am-${c.ClaimID}" type="number" min="0" placeholder="Compensation PKR" style="max-width:160px">
+          <input id="am-${c.ClaimID}" type="number" min="0" placeholder="Compensation amount (PKR)" title="Optional. The amount is shown to the passenger in this update." style="max-width:210px">
           <button onclick="updateClaim(${c.ClaimID})">Update</button>
         </div></div>`).join('');
   const items = await api('/admin/feedback');

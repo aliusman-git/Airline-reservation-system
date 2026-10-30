@@ -205,6 +205,7 @@ BEGIN
         ClaimID   INT NOT NULL,
         Status    VARCHAR(30) NOT NULL,
         Note      VARCHAR(300) NOT NULL CONSTRAINT DF_ClaimUpdates_Note DEFAULT '',
+        Amount    DECIMAL(10,2) NULL,
         CreatedAt DATETIME2(0) NOT NULL CONSTRAINT DF_ClaimUpdates_Created DEFAULT SYSDATETIME(),
         CONSTRAINT PK_ClaimUpdates PRIMARY KEY (UpdateID),
         CONSTRAINT FK_ClaimUpdates_Claim FOREIGN KEY (ClaimID) REFERENCES BaggageClaims(ClaimID)
@@ -795,7 +796,8 @@ BEGIN
     SELECT c.ClaimID, c.ClaimReference, c.ClaimType, c.Status, c.Description, c.ContactPhone, c.CompensationAmount, c.CreatedAt,
            g.TagNumber, f.FlightNumber, p.FullName,
            (SELECT STRING_AGG(CONCAT(CONVERT(VARCHAR(16), u.CreatedAt, 120), ' - ', u.Status,
-                   CASE WHEN u.Note <> '' THEN ': ' + u.Note ELSE '' END), '|') WITHIN GROUP (ORDER BY u.UpdateID)
+                   CASE WHEN u.Note <> '' THEN ': ' + u.Note ELSE '' END,
+                   CASE WHEN u.Amount IS NOT NULL THEN ' - Compensation approved: PKR ' + FORMAT(u.Amount, 'N0') ELSE '' END), '|') WITHIN GROUP (ORDER BY u.UpdateID)
             FROM ClaimUpdates u WHERE u.ClaimID = c.ClaimID) AS Timeline
     FROM BaggageClaims c
     JOIN Baggage g ON g.BagID = c.BagID
@@ -820,7 +822,8 @@ BEGIN
     SET Status = @Status,
         CompensationAmount = CASE WHEN @Status = 'Compensation Approved' THEN @Amount ELSE CompensationAmount END
     WHERE ClaimID = @ClaimID;
-    INSERT INTO ClaimUpdates (ClaimID, Status, Note) VALUES (@ClaimID, @Status, LEFT(LTRIM(RTRIM(ISNULL(@Note, ''))), 300));
+    INSERT INTO ClaimUpdates (ClaimID, Status, Note, Amount)
+    VALUES (@ClaimID, @Status, LEFT(LTRIM(RTRIM(ISNULL(@Note, ''))), 300), CASE WHEN @Status = 'Compensation Approved' THEN @Amount END);
     UPDATE Baggage
     SET Status = CASE WHEN @Status = 'Found' THEN 'Arrived' WHEN @Status = 'Delivered' THEN 'Delivered' ELSE Status END
     WHERE BagID = (SELECT BagID FROM BaggageClaims WHERE ClaimID = @ClaimID);

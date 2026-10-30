@@ -6,7 +6,7 @@
 <title>Airline Reservation</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E✈️%3C/text%3E%3C/svg%3E">
 <style>
-:root{--primary:#0e7490;--primary-dark:#164e63;--accent:#f59e0b;--background:#ecfeff;--text:#0f172a;--danger:#dc2626}
+:root{--primary:#021A54;--primary-dark:#010F36;--accent:#FF85BB;--soft:#FFCEE3;--background:#F5F5F5;--text:#0f172a;--danger:#dc2626}
 body{font-family:system-ui,sans-serif;margin:0;background:var(--background);color:var(--text)}
 header{background:linear-gradient(90deg,var(--primary-dark),var(--primary));color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 8px #0003}
 header #logout{background:#ffffff26;border:1px solid #fff6}
@@ -19,11 +19,11 @@ button{background:var(--primary);color:#fff;border:0;cursor:pointer;transition:b
 button:hover{background:var(--primary-dark)}
 button.danger{background:var(--danger)}
 table{width:100%;border-collapse:collapse}
-th{background:color-mix(in srgb,var(--primary) 15%,white);color:var(--primary-dark)}
+th{background:var(--soft);color:var(--primary-dark)}
 th,td{text-align:left;padding:8px;border-bottom:1px solid color-mix(in srgb,var(--primary) 15%,white);font-size:14px}
-tr:hover td{background:color-mix(in srgb,var(--primary) 6%,white)}
+tr:hover td{background:color-mix(in srgb,var(--accent) 12%,white)}
 #seats button{width:58px;background:color-mix(in srgb,var(--primary) 12%,white);color:var(--primary-dark);border:1px solid color-mix(in srgb,var(--primary) 45%,white)}
-#seats button.business{background:#fef3c7;border-color:var(--accent)}
+#seats button.business{background:var(--soft);border-color:var(--accent)}
 #seats button.chosen{background:var(--primary);color:#fff;border-color:var(--primary)}
 #message{position:fixed;top:12px;right:12px;padding:10px 16px;border-radius:6px;color:#fff;display:none;box-shadow:0 2px 8px #0004}
 .hidden{display:none}
@@ -69,7 +69,7 @@ h2{letter-spacing:.2px;margin-top:6px}
 .hero h1{margin:0 0 4px;font-size:28px}
 .hero p{margin:0;opacity:.92}
 .hero-plane{font-size:54px;animation:fly 4s ease-in-out infinite}
-button{background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 70%,var(--accent)));box-shadow:0 2px 6px color-mix(in srgb,var(--primary) 30%,transparent);transition:transform .15s,box-shadow .15s,filter .15s}
+button{background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 82%,var(--accent)));box-shadow:0 2px 6px color-mix(in srgb,var(--primary) 30%,transparent);transition:transform .15s,box-shadow .15s,filter .15s}
 button:hover{background:linear-gradient(135deg,var(--primary-dark),var(--primary));transform:translateY(-1px);box-shadow:0 5px 12px color-mix(in srgb,var(--primary) 40%,transparent)}
 button.danger{background:linear-gradient(135deg,#dc2626,#f97316)}
 button.tab,button.ghost{box-shadow:none}
@@ -103,8 +103,8 @@ tr:last-child td{border-bottom:none}
 .mainnav{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .navtab{background:#fff;color:var(--primary-dark);border-radius:999px;padding:11px 22px;font-weight:600;box-shadow:0 2px 8px color-mix(in srgb,var(--primary) 15%,transparent)}
 .navtab:hover{background:color-mix(in srgb,var(--primary) 10%,white);color:var(--primary-dark)}
-.navtab.active{background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 70%,var(--accent)));color:#fff}
-.navtab.active:hover{background:var(--primary-dark);color:#fff}
+.navtab.active{background:var(--accent);color:var(--primary)}
+.navtab.active:hover{background:color-mix(in srgb,var(--accent) 85%,var(--primary));color:var(--primary)}
 .summary{background:color-mix(in srgb,var(--primary) 10%,white);padding:12px 16px;border-radius:12px;margin:8px 0 12px;line-height:1.6}
 .methods{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
 .method{background:color-mix(in srgb,var(--primary) 10%,white);color:var(--primary-dark);box-shadow:none}
@@ -145,11 +145,163 @@ textarea:focus{outline:2px solid var(--primary)}
 .badge.Scheduled{background:#dcfce7;color:#166534}
 .badge.Departed{background:#e2e8f0;color:#334155}
 .badge.Flightcancelled{background:#fee2e2;color:#991b1b}
-.move-note{background:#fffbeb;color:#92400e;border-left:4px solid #f59e0b;padding:8px 12px;font-size:13px}
+.move-note{background:#fff0f7;color:var(--primary);border-left:4px solid var(--accent);padding:8px 12px;font-size:13px}
 .move-note.bad{background:#fef2f2;color:#991b1b;border-left-color:#dc2626}
 .realloc-list label{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #e2e8f0;font-size:13px}
 .table-scroll{overflow-x:auto}
-.timeline{margin:6px 0 0;padding-left:18px;font-size:12px;color:#475569}
+
+/* ===== Round 4: customer front-end polish ===== */
+.stepper{display:flex;gap:0;list-style:none;margin:0 0 16px;padding:0;counter-reset:s}
+.stepper li{flex:1;display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;color:#64748b;font-weight:600;font-size:14px;border-bottom:4px solid #e2e8f0;transition:all .3s}
+.stepper li:first-child{border-radius:12px 0 0 12px}.stepper li:last-child{border-radius:0 12px 12px 0}
+.stepper li span{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#e2e8f0;color:#475569;font-size:13px;flex:none}
+.stepper li.active{color:var(--primary);border-bottom-color:var(--accent)}
+.stepper li.active span{background:var(--accent);color:var(--primary)}
+.stepper li.done{color:var(--primary);border-bottom-color:var(--primary)}
+.stepper li.done span{background:var(--primary);color:#fff}
+.search-bar{display:grid;grid-template-columns:1fr auto 1fr 1fr auto;gap:10px;align-items:end}
+.search-bar label{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
+.search-bar select,.search-bar input,.search-bar button{margin:4px 0 0;width:100%;box-sizing:border-box}
+.search-bar .swap{width:44px;height:42px;padding:0;font-size:20px;background:var(--soft);color:var(--primary);box-shadow:none}
+.search-bar .swap:hover{background:var(--accent)}
+.flight-list{display:grid;gap:12px;margin-top:14px}
+.flight-card{display:grid;grid-template-columns:110px 1fr 150px auto;align-items:center;gap:18px;background:#fff;border:1px solid color-mix(in srgb,var(--primary) 12%,white);border-radius:14px;padding:14px 18px;transition:border-color .2s,box-shadow .2s,transform .2s}
+.flight-card:hover{border-color:var(--accent);box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 30%,transparent);transform:translateY(-2px)}
+.fc-no{font-weight:800;color:var(--primary);font-size:16px}
+.fc-date{font-size:12px;color:#64748b;margin-top:2px}
+.fc-times{display:flex;align-items:center;gap:14px}
+.fc-times .time{font-size:24px;font-weight:800;color:var(--primary);line-height:1}
+.fc-times .code{font-size:12px;color:#64748b;margin-top:4px;font-weight:600}
+.fc-line{flex:1;position:relative;text-align:center;font-size:12px;color:#64748b;min-width:70px}
+.fc-line::before{content:'';position:absolute;left:0;right:0;top:50%;border-top:2px dashed var(--accent)}
+.fc-line span{position:relative;background:#fff;padding:0 8px}
+.fc-price{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.fc-price small{color:#64748b;font-size:12px}
+.fc-price strong{font-size:20px;color:var(--primary)}
+.skeleton{height:76px;border-radius:14px;background:linear-gradient(90deg,#eceff3 25%,#f8fafc 50%,#eceff3 75%);background-size:200% 100%;animation:shimmer 1.2s infinite}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+.empty-state{text-align:center;padding:28px 16px;color:#64748b;background:linear-gradient(180deg,#fff,#fff0f7);border:2px dashed var(--soft);border-radius:14px;margin-top:12px}
+.empty-state strong{display:block;color:var(--primary);font-size:17px;margin-bottom:4px}
+.pass-list{display:grid;gap:16px;margin-top:14px}
+.pass{display:grid;grid-template-columns:1fr 200px;background:#fff;border-radius:16px;overflow:hidden;border:1px solid color-mix(in srgb,var(--primary) 12%,white);box-shadow:0 6px 18px color-mix(in srgb,var(--primary) 10%,transparent)}
+.pass-main{padding:16px 20px;border-top:5px solid var(--primary)}
+.pass.inactive .pass-main{border-top-color:#94a3b8}
+.pass.inactive{opacity:.75}
+.pass-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pass-route{display:flex;align-items:center;gap:14px;font-size:30px;font-weight:800;color:var(--primary);margin:10px 0 6px;letter-spacing:1px}
+.pass-arrow{color:var(--accent);font-size:26px}
+.pass-meta{display:flex;gap:22px;flex-wrap:wrap;margin-top:8px}
+.pass-meta small{display:block;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.pass-meta b{color:var(--primary-dark);font-size:14px}
+.pass .move-note{margin-top:12px;border-radius:0 8px 8px 0}
+.pass-stub{padding:16px;border-left:2px dashed var(--soft);background:linear-gradient(180deg,#fff,#fff0f7);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;text-align:center}
+.pass-stub small{color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.pass-stub strong{color:var(--primary);font-size:18px}
+.pass-stub .price{font-size:20px}
+.pass-stub button{margin:8px 0 0}
+@media (max-width:860px){.search-bar{grid-template-columns:1fr 1fr}.search-bar .swap{display:none}.flight-card{grid-template-columns:1fr 1fr}.fc-times{grid-column:1/-1;order:3}.pass{grid-template-columns:1fr}.pass-stub{border-left:0;border-top:2px dashed var(--soft)}.stepper li{font-size:12px;padding:8px}.pass-route{font-size:24px}}
+@media (prefers-reduced-motion:reduce){.skeleton{animation:none}.flight-card{transition:none}}
+
+/* ===== Round 5: seat map, payment, baggage, feedback polish ===== */
+.col-label{display:inline-block;width:58px;margin:0 4px 0 0;text-align:center;font-size:12px;font-weight:700;color:#64748b}
+.cabin-head{margin-bottom:6px}
+.class-label{text-align:center;margin:14px 0 6px;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--primary);display:flex;align-items:center;gap:10px}
+.class-label::before,.class-label::after{content:'';flex:1;border-top:2px dashed var(--soft)}
+.class-label.Business{color:#be185d}
+#selection{margin:12px 0}
+#selection .chip{margin-right:6px;background:var(--soft);color:var(--primary);font-size:13px}
+#paymentSummary{background:linear-gradient(180deg,#fff,#fff0f7);border:1px solid var(--soft);padding:14px 18px}
+.sum-line{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--soft)}
+.sum-line.total{border-bottom:0;margin-top:4px;padding-top:10px;font-size:19px;color:var(--primary)}
+.secure-badge{display:inline-block;margin-left:10px;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.3px;background:var(--soft);color:var(--primary);vertical-align:middle}
+.methods{gap:10px}
+.method{flex:1;min-width:130px;padding:12px 14px;border-radius:12px;border:2px solid transparent;font-weight:700;background:#fff;box-shadow:0 0 0 1px color-mix(in srgb,var(--primary) 18%,white)}
+.method:hover{background:#fff0f7;color:var(--primary)}
+.method.active,.method.active:hover{background:var(--soft);color:var(--primary);border-color:var(--accent);box-shadow:none}
+.card-preview{max-width:360px;border-radius:16px;padding:18px 20px;margin:6px 0 14px;color:#fff;background:linear-gradient(135deg,var(--primary-dark),var(--primary) 60%,color-mix(in srgb,var(--primary) 60%,var(--accent)));box-shadow:0 10px 24px color-mix(in srgb,var(--primary) 30%,transparent);position:relative;overflow:hidden}
+.card-preview::after{content:'';position:absolute;right:-30px;top:-30px;width:130px;height:130px;border-radius:50%;background:var(--accent);opacity:.25}
+.cp-chip{width:38px;height:28px;border-radius:6px;background:linear-gradient(135deg,#fde68a,#f59e0b);margin-bottom:16px}
+.cp-number{font-size:20px;letter-spacing:2px;font-family:ui-monospace,monospace;margin-bottom:16px}
+.cp-bottom{display:flex;justify-content:space-between;gap:10px;font-size:13px;letter-spacing:1px}
+.cp-bottom small{display:block;opacity:.7;font-size:10px;text-transform:uppercase}
+#payButton{font-size:16px;padding:12px 28px;font-weight:800;color:var(--primary);background:linear-gradient(135deg,var(--accent),#ff6fae)}
+#payButton:hover{background:linear-gradient(135deg,#ff9ac9,var(--accent));filter:brightness(1.03)}
+.bag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:14px}
+.bag-tag{position:relative;background:#fff;border-radius:16px;padding:16px 16px 14px;border:1px solid color-mix(in srgb,var(--primary) 12%,white);border-top:8px solid var(--primary);box-shadow:0 6px 16px color-mix(in srgb,var(--primary) 10%,transparent)}
+.bag-tag::before{content:'';position:absolute;top:-4px;left:50%;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:var(--background);box-shadow:inset 0 1px 3px #0003}
+.bt-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
+.bt-no{font-family:ui-monospace,monospace;font-weight:800;letter-spacing:1px;color:var(--primary)}
+.bt-route{font-size:24px;font-weight:800;color:var(--primary);margin:10px 0;letter-spacing:1px}
+.bt-route span{color:var(--accent)}
+.bt-meta{display:flex;justify-content:space-between;gap:10px;margin-bottom:10px}
+.bt-meta small{display:block;color:#64748b;font-size:11px;text-transform:uppercase}
+.bt-meta b{color:var(--primary-dark)}
+.bt-claim{background:#fff0f7;border-left:4px solid var(--accent);padding:6px 10px;font-size:12px;margin-bottom:10px;border-radius:0 8px 8px 0;color:var(--primary)}
+.bag-tag button{width:100%;margin:4px 0 0}
+.timeline{list-style:none;margin:10px 0 0 6px;padding:0;border-left:2px solid var(--soft);font-size:13px;color:#475569}
+.timeline li{position:relative;padding:2px 0 8px 18px}
+.timeline li::before{content:'';position:absolute;left:-7px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 0 0 1px var(--accent)}
+.stars button{font-size:32px;border-radius:12px}
+.star-label{align-self:center;margin-left:12px;color:var(--primary);font-weight:700}
+.fb-list{display:grid;gap:12px;margin-top:12px}
+.fb-card{background:#fff;border:1px solid color-mix(in srgb,var(--primary) 12%,white);border-left:5px solid var(--accent);border-radius:12px;padding:12px 16px}
+.fb-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fb-top small{margin-left:auto;color:#64748b}
+.fb-card p{margin:8px 0 0;color:#334155}
+
+/* ===== Round 3: admin dashboard design ===== */
+body.is-admin main{max-width:1180px}
+body.is-admin header{background:linear-gradient(90deg,#010D33,var(--primary-dark) 45%,var(--primary))}
+.admin-hero{position:relative;overflow:hidden;border-radius:20px;padding:26px 28px;margin-bottom:18px;color:#fff;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;
+  background:radial-gradient(circle at 85% 20%,color-mix(in srgb,var(--accent) 45%,transparent),transparent 45%),linear-gradient(135deg,#010D33,var(--primary-dark) 55%,var(--primary));box-shadow:0 12px 32px color-mix(in srgb,var(--primary-dark) 40%,transparent)}
+.admin-hero::after{content:'\2708';position:absolute;right:26px;top:-6px;font-size:120px;opacity:.09;transform:rotate(-12deg)}
+.admin-kicker{display:inline-block;background:#ffffff26;border:1px solid #ffffff40;border-radius:999px;padding:4px 12px;font-size:12px;letter-spacing:.8px;text-transform:uppercase;font-weight:700}
+.admin-hero h1{margin:10px 0 4px;font-size:28px}
+.admin-hero p{margin:0;opacity:.8;font-size:14px}
+.admin-nav{display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:1}
+.admin-nav button{background:#ffffff1f;border:1px solid #ffffff4d;color:#fff;border-radius:999px;margin:0;padding:8px 16px;font-weight:600;backdrop-filter:blur(4px)}
+.admin-nav button:hover{background:#ffffff40}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:18px}
+.stat{background:#fff;border-radius:16px;padding:16px 18px;display:flex;gap:14px;align-items:center;box-shadow:0 4px 18px color-mix(in srgb,var(--primary) 12%,transparent);border:1px solid color-mix(in srgb,var(--primary) 10%,white);animation:statIn .5s ease-out both}
+.stat:nth-child(2){animation-delay:.07s}.stat:nth-child(3){animation-delay:.14s}.stat:nth-child(4){animation-delay:.21s}.stat:nth-child(5){animation-delay:.28s}
+@keyframes statIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.stat{border-left:5px solid var(--primary)}
+.stat.warn{border-left-color:#ea580c}.stat.good{border-left-color:#16a34a}.stat.gold{border-left-color:var(--accent)}.stat.blue{border-left-color:#2563eb}
+.stat .num{font-size:28px;font-weight:800;line-height:1;color:var(--primary-dark)}
+.stat .lbl{font-size:12px;color:#64748b;margin-top:4px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.stat .sub{font-size:12px;color:#94a3b8;margin-top:2px}
+.stat.warn{background:linear-gradient(135deg,#fff7ed,#fff);border-color:#fdba74}
+.stat.warn .num{color:#c2410c}
+.alert-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:linear-gradient(90deg,#fef2f2,#fff7ed);border:1px solid #fecaca;border-left:6px solid #dc2626;border-radius:14px;padding:12px 16px;margin-bottom:12px;animation:statIn .5s ease-out both}
+.alert-strip .msg{flex:1;min-width:200px;color:#7f1d1d;font-size:14px}
+.alert-strip button{margin:0}
+.pill{display:inline-flex;align-items:center;gap:6px;font-weight:700}
+.pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.flight-table td{vertical-align:middle}
+.flight-no{font-weight:800;color:var(--primary-dark);font-size:15px}
+.route{display:flex;align-items:center;gap:8px;font-weight:700}
+.route .arrow{color:var(--accent);font-size:16px}
+.when strong{display:block}.when span{font-size:12px;color:#64748b}
+.occ{min-width:130px}
+.occ .bar{height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+.occ .bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#22c55e,#16a34a);transition:width .8s ease}
+.occ .bar span.mid{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+.occ .bar span.high{background:linear-gradient(90deg,#f97316,#dc2626)}
+.occ small{color:#64748b;font-size:12px}
+tr.row-cancelled td{background:#fef2f2}
+.btn-sm{padding:6px 12px;font-size:13px;margin:2px 4px 2px 0;border-radius:999px;font-weight:600}
+.btn-sm.ghost{background:color-mix(in srgb,var(--primary) 10%,white);color:var(--primary-dark)}
+.btn-sm.ghost:hover{background:color-mix(in srgb,var(--primary) 20%,white)}
+.btn-sm.go{background:linear-gradient(135deg,var(--accent),#ff6fae);color:var(--primary);animation:pulseGo 2s infinite}
+@keyframes pulseGo{0%,100%{box-shadow:0 0 0 0 #FF85BB99}50%{box-shadow:0 0 0 8px #FF85BB00}}
+.chip{display:inline-block;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;background:color-mix(in srgb,var(--primary) 12%,white);color:var(--primary-dark)}
+.chip.Baggage{background:#e0f2fe;color:#075985}.chip.Payment{background:#dcfce7;color:#166534}.chip.Flight{background:#ede9fe;color:#5b21b6}.chip.Website{background:#fef3c7;color:#92400e}.chip.Booking{background:#fce7f3;color:#9d174d}
+.stars-gold{color:#f59e0b;letter-spacing:2px}
+.section-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.section-head h2{margin:0}
+.count-badge{background:var(--primary);color:#fff;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700}
+@media (prefers-reduced-motion:reduce){.stat,.alert-strip,.btn-sm.go{animation:none}.occ .bar span{transition:none}}
+
 .claimbox{border:1px solid color-mix(in srgb,var(--primary) 18%,white);border-radius:12px;padding:12px 14px;margin:10px 0}
 .claimbox .head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14px}
 .admin-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
@@ -204,25 +356,29 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
       <span class="hero-plane">&#9992;</span>
     </div>
     <div class="mainnav">
-      <button id="navtab-book" class="navtab active" onclick="showMainTab('book')">&#9992; Book a flight</button>
-      <button id="navtab-payment" class="navtab hidden" onclick="showMainTab('payment')">&#128179; Payment</button>
-      <button id="navtab-bookings" class="navtab" onclick="showMainTab('bookings')">&#127903; My bookings</button>
-      <button id="navtab-baggage" class="navtab" onclick="showMainTab('baggage')">&#129523; Baggage</button>
-      <button id="navtab-feedback" class="navtab" onclick="showMainTab('feedback')">&#11088; Feedback</button>
-      <button id="navtab-admin" class="navtab hidden" onclick="showMainTab('admin')">&#128737; Admin</button>
+      <button id="navtab-book" class="navtab active" onclick="showMainTab('book')">Book a flight</button>
+      <button id="navtab-payment" class="navtab hidden" onclick="showMainTab('payment')">Payment</button>
+      <button id="navtab-bookings" class="navtab" onclick="showMainTab('bookings')">My bookings</button>
+      <button id="navtab-baggage" class="navtab" onclick="showMainTab('baggage')">Baggage</button>
+      <button id="navtab-feedback" class="navtab" onclick="showMainTab('feedback')">Feedback</button>
+      <button id="navtab-admin" class="navtab hidden" onclick="showMainTab('admin')">Admin</button>
     </div>
+    <ol id="stepper" class="stepper"><li id="step-1" class="active"><span>1</span>Search</li><li id="step-2"><span>2</span>Seats and baggage</li><li id="step-3"><span>3</span>Payment</li></ol>
     <div id="tab-book">
     <section class="card">
-      <h2>🔎 Search flights</h2>
-      <select id="origin"></select>
-      <select id="destination"></select>
-      <input id="travelDate" type="date">
-      <button onclick="searchFlights()">Search</button>
-      <table><tbody id="results"></tbody></table>
+      <h2>Search flights</h2>
+      <div class="search-bar">
+        <label>From<select id="origin"></select></label>
+        <button type="button" class="swap" onclick="swapAirports()" title="Swap airports" aria-label="Swap airports">&#8646;</button>
+        <label>To<select id="destination"></select></label>
+        <label>Date<input id="travelDate" type="date"></label>
+        <button onclick="searchFlights()">Search flights</button>
+      </div>
+      <div id="results" class="flight-list"></div>
     </section>
     <section class="card">
-      <h2>🛫 Upcoming flights</h2>
-      <table><tbody id="upcoming"></tbody></table>
+      <h2>Upcoming flights</h2>
+      <div id="upcoming" class="flight-list"></div>
     </section>
     <section id="seatCard" class="card hidden">
       <h2 id="seatTitle">Choose your seat</h2>
@@ -233,7 +389,7 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
         <button id="filter-middle" onclick="setSeatFilter('middle')">Middle</button>
       </div>
       <p class="legend"><small>Window = A and F, aisle = C and D, middle = B and E. Hover a seat for its price.</small><br>
-        <span style="background:#e2e8f0"></span>Taken <span style="background:#fef3c7;border:1px solid #f59e0b"></span>Business <span style="background:var(--primary)"></span>Your choice</p>
+        <span style="background:#e2e8f0"></span>Taken <span style="background:var(--soft);border:1px solid var(--accent)"></span>Business <span style="background:var(--primary)"></span>Your choice</p>
       <p><small>Booking for a family? Click several seats to select them (up to 6), or let us suggest seats together. Click a selected seat again to remove it.</small></p>
       <p>Travelling together? <input id="groupSize" type="number" min="2" max="6" value="4" style="width:70px">
         <select id="groupClass"><option value="Economy">Economy</option><option value="Business">Business</option><option value="Any">Any class</option></select>
@@ -242,7 +398,7 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
       <div id="seats"></div>
       <p id="selection"></p>
       <div class="summary">
-        <strong>&#129523; Baggage</strong> <input id="bagSelect" type="number" min="0" max="40" step="1" value="0" style="width:90px" oninput="updateBagFee()"> kg
+        <strong>Baggage</strong> <input id="bagSelect" type="number" min="0" max="40" step="1" value="0" style="width:90px" oninput="updateBagFee()"> kg
         <div id="bagFeeText" class="note"></div>
         <small>20 kg free per passenger, PKR 500 for each extra kg, up to 40 kg per passenger. Each bag can weigh up to 23 kg, so heavier baggage is split into several bags with their own tags. The fee is added to your payment.</small>
       </div>
@@ -250,9 +406,8 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
     </section>
     </div>
     <div id="tab-payment" class="hidden">
-    <div class="steps"><span class="done">1 Seats</span><span class="current">2 Payment</span><span>3 Confirmation</span></div>
     <section id="paymentCard" class="card">
-      <h2>&#128274; Payment</h2>
+      <h2>Payment <span class="secure-badge">Secure demo checkout</span></h2>
       <div id="paymentSummary" class="summary"></div>
       <div class="methods">
         <button id="method-Card" class="method active" onclick="setPaymentMethod('Card')">Card</button>
@@ -262,6 +417,7 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
       </div>
       <label class="field"><span id="payerLabel">Name on card</span><input id="payerName" autocomplete="off"></label>
       <div id="cardFields">
+        <div class="card-preview"><div class="cp-chip"></div><div class="cp-number" id="cpNumber">&bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull;</div><div class="cp-bottom"><div><small>Card holder</small><span id="cpName">YOUR NAME</span></div><div><small>Expires</small><span id="cpExpiry">MM/YY</span></div></div></div>
         <label class="field">Card number<input id="cardNumber" inputmode="numeric" maxlength="19" placeholder="1234 5678 9012 3456" oninput="formatCardNumber(this)"></label>
         <div class="row">
           <label class="field">Expiry (MM/YY)<input id="cardExpiry" maxlength="5" placeholder="MM/YY" oninput="formatExpiry(this)"></label>
@@ -291,17 +447,17 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
     </div>
     <div id="tab-bookings" class="hidden">
     <section class="card">
-      <h2>🎟 My bookings</h2>
-      <table><tbody id="bookings"></tbody></table>
+      <h2>My bookings</h2>
+      <div id="bookings" class="pass-list"></div>
     </section>
     </div>
     <div id="tab-baggage" class="hidden">
     <section class="card">
-      <h2>&#127991; My bags</h2>
-      <table><tbody id="bagList"></tbody></table>
+      <h2>My bags</h2>
+      <div id="bagList" class="bag-grid"></div>
     </section>
     <section id="claimForm" class="card hidden">
-      <h2>&#128270; Report a baggage problem</h2>
+      <h2>Report a baggage problem</h2>
       <p id="claimBagInfo" class="summary"></p>
       <label class="field">What happened?<select id="claimType"><option value="Lost">Lost</option><option value="Delayed">Delayed</option><option value="Damaged">Damaged</option></select></label>
       <label class="field">Describe the bag and the problem (colour, size, contents, damage)<textarea id="claimDescription" maxlength="500"></textarea></label>
@@ -310,13 +466,13 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
       <button onclick="submitClaim()">Submit claim</button>
     </section>
     <section class="card">
-      <h2>&#128230; My claims</h2>
+      <h2>My claims</h2>
       <div id="claimList"></div>
     </section>
     </div>
     <div id="tab-feedback" class="hidden">
     <section class="card">
-      <h2>&#11088; Share your feedback</h2>
+      <h2>Share your feedback</h2>
       <div class="stars" id="stars"></div>
       <div class="row">
         <label class="field">Category<select id="fbCategory"><option>Booking</option><option>Payment</option><option>Flight</option><option>Baggage</option><option>Website</option><option>Other</option></select></label>
@@ -328,31 +484,42 @@ input.bad,textarea.bad,select.bad{border-color:#dc2626 !important;box-shadow:0 0
       <button onclick="submitFeedback()">Send feedback</button>
     </section>
     <section class="card">
-      <h2>&#128172; My feedback</h2>
-      <table><tbody id="fbList"></tbody></table>
+      <h2>My feedback</h2>
+      <div id="fbList" class="fb-list"></div>
     </section>
     </div>
     <div id="tab-admin" class="hidden">
-    <section class="card">
-      <h2>&#9992; Flights and re-allocation (admin)</h2>
+    <div class="admin-hero">
+      <div><span class="admin-kicker">Operations centre</span><h1 id="adminGreeting">Admin dashboard</h1><p id="adminDate"></p></div>
+      <div class="admin-nav">
+        <button onclick="jumpTo('adminFlightsCard')">Flights</button>
+        <button onclick="jumpTo('adminHistoryCard')">Moves</button>
+        <button onclick="jumpTo('adminClaimsCard')">Claims</button>
+        <button onclick="jumpTo('adminFeedbackCard')">Feedback</button>
+      </div>
+    </div>
+    <div id="adminStats" class="stat-grid"></div>
+    <div id="adminAlerts"></div>
+    <section class="card" id="adminFlightsCard">
+      <h2>Flights and re-allocation</h2>
       <p class="note">Cancel or reschedule a flight, then move its passengers to another flight on the same route. Every move is saved in the history below.</p>
       <div id="adminFlights" class="table-scroll"></div>
     </section>
     <section class="card hidden" id="reallocPanel">
-      <h2>&#128260; Move passengers</h2>
+      <h2>Move passengers</h2>
       <div id="reallocBody"></div>
       <div id="reallocError" class="form-error hidden" role="alert"></div>
     </section>
-    <section class="card">
-      <h2>&#128221; Re-allocation history</h2>
+    <section class="card" id="adminHistoryCard">
+      <h2>Re-allocation history</h2>
       <div class="table-scroll"><table><tbody id="adminRealloc"></tbody></table></div>
     </section>
-    <section class="card">
-      <h2>&#128737; Baggage claims (admin)</h2>
+    <section class="card" id="adminClaimsCard">
+      <div class="section-head"><h2>Baggage claims</h2><span class="count-badge" id="claimCount">0</span></div>
       <div id="adminClaims"></div>
     </section>
-    <section class="card">
-      <h2>&#128172; All feedback</h2>
+    <section class="card" id="adminFeedbackCard">
+      <div class="section-head"><h2>All feedback</h2><span class="count-badge" id="feedbackCount">0</span></div>
       <table><tbody id="adminFeedback"></tbody></table>
     </section>
     </div>
@@ -451,22 +618,54 @@ const loadAirports = () => run(async () => {
   byId('destination').innerHTML = options;
   byId('destination').selectedIndex = 1;
 });
+const durationText = (departure, arrival) => {
+  const minutes = Math.max(0, Math.round((new Date(arrival) - new Date(departure)) / 60000));
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
+};
+const skeletonCards = count => Array.from({length: count}, () => '<div class="skeleton"></div>').join('');
+const flightCards = (flights, fallbackOrigin, fallbackDestination) => flights.map(f => {
+  const from = f.OriginCode || fallbackOrigin;
+  const to = f.DestinationCode || fallbackDestination;
+  const fewLeft = f.AvailableSeats < 20;
+  return `<div class="flight-card">
+    <div><div class="fc-no">${esc(f.FlightNumber)}</div><div class="fc-date">${esc(dayText(f.DepartureTime))}</div></div>
+    <div class="fc-times">
+      <div><div class="time">${esc(timeText(f.DepartureTime))}</div><div class="code">${esc(from)}</div></div>
+      <div class="fc-line"><span>${durationText(f.DepartureTime, f.ArrivalTime)}</span></div>
+      <div><div class="time">${esc(timeText(f.ArrivalTime))}</div><div class="code">${esc(to)}</div></div>
+    </div>
+    <div class="fc-price"><small>from</small><strong>PKR ${Number(f.BasePrice).toLocaleString('en-US')}</strong>
+      <span class="seats-left ${fewLeft ? 'low' : ''}">${fewLeft ? 'Only ' + f.AvailableSeats + ' left' : f.AvailableSeats + ' seats'}</span></div>
+    <button onclick="chooseSeat(${f.FlightID}, '${esc(f.FlightNumber)}')">Choose seat</button>
+  </div>`;
+}).join('');
+const swapAirports = () => {
+  const originValue = byId('origin').value;
+  byId('origin').value = byId('destination').value;
+  byId('destination').value = originValue;
+};
+const updateStepper = () => {
+  const onPayment = !byId('tab-payment').classList.contains('hidden');
+  const onBook = !byId('tab-book').classList.contains('hidden');
+  byId('stepper').classList.toggle('hidden', !(onBook || onPayment));
+  const step = onPayment ? 3 : (!byId('seatCard').classList.contains('hidden') ? 2 : 1);
+  [1, 2, 3].forEach(number => {
+    byId('step-' + number).classList.toggle('active', number === step);
+    byId('step-' + number).classList.toggle('done', number < step);
+  });
+};
 const searchFlights = () => run(async () => {
-  const query = `origin=${byId('origin').value}&destination=${byId('destination').value}&date=${byId('travelDate').value}`;
-  const flights = await api('/flights?' + query);
-  byId('results').innerHTML = flights.length === 0 ? '<tr><td>No flights found for this route and date.</td></tr>'
-    : '<tr><th>Flight</th><th>Departs</th><th>Arrives</th><th>From PKR</th><th>Free seats</th><th></th></tr>' +
-      flights.map(f => `<tr><td>${f.FlightNumber}</td><td>${showTime(f.DepartureTime)}</td><td>${showTime(f.ArrivalTime)}</td>
-        <td>${f.BasePrice}</td><td><span class="seats-left ${f.AvailableSeats < 20 ? 'low' : ''}">${f.AvailableSeats}</span></td>
-        <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
+  const origin = byId('origin').value;
+  const destination = byId('destination').value;
+  byId('results').innerHTML = skeletonCards(3);
+  const flights = await api(`/flights?origin=${origin}&destination=${destination}&date=${byId('travelDate').value}`);
+  byId('results').innerHTML = flights.length === 0
+    ? '<div class="empty-state"><strong>No flights found</strong>Try another date or a different route.</div>'
+    : flightCards(flights, origin, destination);
 });
 const loadUpcoming = () => run(async () => {
   const flights = await api('/flights/upcoming');
-  byId('upcoming').innerHTML = flights.length === 0 ? '<tr><td>No upcoming flights.</td></tr>'
-    : '<tr><th>Flight</th><th>Route</th><th>Departs</th><th>From PKR</th><th>Free seats</th><th></th></tr>' +
-      flights.map(f => `<tr><td>${f.FlightNumber}</td><td>${f.OriginCode} to ${f.DestinationCode}</td><td>${showTime(f.DepartureTime)}</td>
-        <td>${f.BasePrice}</td><td><span class="seats-left ${f.AvailableSeats < 20 ? 'low' : ''}">${f.AvailableSeats}</span></td>
-        <td><button onclick="chooseSeat(${f.FlightID}, '${f.FlightNumber}')">Choose seat</button></td></tr>`).join('');
+  byId('upcoming').innerHTML = flights.length === 0 ? '<div class="empty-state"><strong>No upcoming flights</strong>Check back soon.</div>' : flightCards(flights, '', '');
 });
 const chooseSeat = (flightId, flightNumber) => run(async () => {
   selectedFlightId = flightId;
@@ -481,15 +680,26 @@ const chooseSeat = (flightId, flightNumber) => run(async () => {
   cabinSeats = await api(`/flights/${flightId}/seat-map`);
   renderCabin();
   byId('seatCard').classList.remove('hidden');
+  updateStepper();
   byId('seatCard').scrollIntoView({behavior: 'smooth'});
 });
 const seatType = letter => 'AF'.includes(letter) ? 'window' : 'CD'.includes(letter) ? 'aisle' : 'middle';
 function renderCabin() {
+  if (cabinSeats.length === 0) { byId('seats').innerHTML = ''; return; }
   const chosenSeats = String(selectedSeat ?? '').split(',');
   const rows = {};
   cabinSeats.forEach(s => (rows[parseInt(s.SeatNumber)] ??= []).push(s));
-  byId('seats').innerHTML = '<div class="cabin">' + Object.keys(rows).map(rowNumber => {
-    const buttons = rows[rowNumber].sort((a, b) => a.SeatNumber.localeCompare(b.SeatNumber)).map(s => {
+  const rowNumbers = Object.keys(rows);
+  const letters = rows[rowNumbers[0]].map(s => s.SeatNumber.slice(-1)).sort();
+  const header = '<div class="cabin-row cabin-head"><span class="row-label"></span>' +
+    letters.map(letter => `<span class="col-label">${letter}</span>${letter === 'C' ? '<span class="aisle"></span>' : ''}`).join('') + '</div>';
+  let previousClass = '';
+  byId('seats').innerHTML = '<div class="cabin">' + header + rowNumbers.map(rowNumber => {
+    const rowSeats = rows[rowNumber].sort((a, b) => a.SeatNumber.localeCompare(b.SeatNumber));
+    const rowClass = rowSeats[0].SeatClass;
+    const classLabel = rowClass !== previousClass ? `<div class="class-label ${esc(rowClass)}">${esc(rowClass)} class</div>` : '';
+    previousClass = rowClass;
+    const buttons = rowSeats.map(s => {
       const letter = s.SeatNumber.slice(-1);
       const type = seatType(letter);
       const filteredOut = seatFilter !== 'all' && type !== seatFilter;
@@ -497,7 +707,7 @@ function renderCabin() {
       return `<button class="${classes}" ${s.IsTaken || (filteredOut && !chosenSeats.includes(s.SeatNumber)) ? 'disabled' : ''} title="${s.SeatNumber} - ${type} - PKR ${s.Price}"
         onclick="selectSeat('${s.SeatNumber}')">${letter}</button>${letter === 'C' ? '<span class="aisle"></span>' : ''}`;
     }).join('');
-    return `<div class="cabin-row"><span class="row-label">${rowNumber}</span>${buttons}</div>`;
+    return classLabel + `<div class="cabin-row"><span class="row-label">${rowNumber}</span>${buttons}</div>`;
   }).join('') + '</div>';
 }
 function setSeatFilter(filterName, redraw = true) {
@@ -517,7 +727,7 @@ function setChosenSeats(chosen) {
   selectedSeat = chosen.length ? chosen.join(',') : null;
   renderCabin();
   const total = cabinSeats.filter(s => chosen.includes(s.SeatNumber)).reduce((sum, s) => sum + Number(s.Price), 0);
-  byId('selection').textContent = chosen.length ? `${chosen.length === 1 ? 'Seat' : 'Seats'} ${chosen.join(', ')} - PKR ${total}` : '';
+  byId('selection').innerHTML = chosen.length ? chosen.map(seat => `<span class="chip">${esc(seat)}</span>`).join('') + `<strong>${chosen.length === 1 ? 'Seat' : 'Seats'} total: PKR ${total.toLocaleString()}</strong>` : '';
   renderBagOptions();
 }
 const bagFeeFor = (kg, seats) => Math.max(0, kg - seats * 20) * 500;
@@ -573,7 +783,11 @@ function openPayment() {
   const fare = chosenTotal();
   const bagFee = bagFeeFor(kg, seatCount);
   const total = fare + bagFee;
-  byId('paymentSummary').innerHTML = `Flight <strong>${selectedFlightNumber}</strong> - ${seatCount === 1 ? 'Seat' : 'Seats'} <strong>${selectedSeat.replaceAll(',', ', ')}</strong><br>Tickets: PKR ${fare.toLocaleString()}<br>Baggage: ${kg} kg - PKR ${bagFee.toLocaleString()}<br>Total to pay: <strong>PKR ${total.toLocaleString()}</strong>`;
+  byId('paymentSummary').innerHTML = `<div class="sum-line"><span>Flight</span><strong>${esc(selectedFlightNumber)}</strong></div>
+    <div class="sum-line"><span>${seatCount === 1 ? 'Seat' : 'Seats'}</span><strong>${esc(selectedSeat.replaceAll(',', ', '))}</strong></div>
+    <div class="sum-line"><span>Tickets</span><span>PKR ${fare.toLocaleString()}</span></div>
+    <div class="sum-line"><span>Baggage (${kg} kg)</span><span>PKR ${bagFee.toLocaleString()}</span></div>
+    <div class="sum-line total"><span>Total to pay</span><strong>PKR ${total.toLocaleString()}</strong></div>`;
   byId('payButton').textContent = `Pay PKR ${total.toLocaleString()}`;
   setPaymentMethod(paymentMethod);
   byId('navtab-payment').classList.remove('hidden');
@@ -631,23 +845,31 @@ const loadBookings = () => run(async () => {
   loadUpcoming();
   const noticeFor = b => {
     if (b.BookingStatus === 'Confirmed' && b.FlightStatus === 'Cancelled')
-      return '<div class="move-note bad">&#9888; Flight ' + esc(b.FlightNumber) + ' was cancelled by the airline. The airline may move you to another flight; until then you can cancel this booking for a full refund (PKR ' + esc(b.ExpectedRefund ?? 0) + ').</div>';
+      return '<div class="move-note bad">Flight ' + esc(b.FlightNumber) + ' was cancelled by the airline. The airline may move you to another flight; until then you can cancel this booking for a full refund (PKR ' + esc(b.ExpectedRefund ?? 0) + ').</div>';
     if (b.MovedFromFlight)
-      return '<div class="move-note">&#128260; The airline moved you from flight ' + esc(b.MovedFromFlight) + ' (seats ' + esc(b.MovedFromSeats) + ') to this flight. Reason: ' + esc(b.MoveReason) + '. You paid nothing extra.</div>';
+      return '<div class="move-note">The airline moved you from flight ' + esc(b.MovedFromFlight) + ' (seats ' + esc(b.MovedFromSeats) + ') to this flight. Reason: ' + esc(b.MoveReason) + '. You paid nothing extra.</div>';
     if (b.MovedToBooking)
-      return '<div class="move-note">&#128260; The airline moved this booking to booking #' + esc(b.MovedToBooking) + '.</div>';
+      return '<div class="move-note">The airline moved this booking to booking #' + esc(b.MovedToBooking) + '.</div>';
     return '';
   };
-  byId('bookings').innerHTML = bookings.length === 0 ? '<tr><td>No bookings yet.</td></tr>'
-    : '<tr><th>#</th><th>Flight</th><th>Route</th><th>Departs</th><th>Seat</th><th>Price</th><th>Status</th><th>Payment</th><th>Refund</th><th></th></tr>' +
-      bookings.map(b => {
-        const notice = noticeFor(b);
-        const badgeText = b.BookingStatus === 'Confirmed' && b.FlightStatus === 'Cancelled' ? 'Flight cancelled' : b.BookingStatus;
-        return `<tr><td>${b.BookingID}</td><td>${b.FlightNumber}</td><td>${b.OriginCode} to ${b.DestinationCode}</td>
-        <td>${showTime(b.DepartureTime)}</td><td>${b.SeatNumber}</td><td>${b.Price}</td><td><span class="badge ${cls(badgeText)}">${esc(badgeText)}</span></td>
-        <td>${b.PaymentMethod ?? '-'}</td><td>${b.RefundAmount ?? ''}</td>
-        <td>${b.BookingStatus === 'Confirmed' ? `<button class="danger" onclick="cancelBooking(${b.BookingID}, ${b.ExpectedRefund ?? 0})">Cancel</button>` : ''}</td></tr>` +
-        (notice ? `<tr><td colspan="10" style="padding:0">${notice}</td></tr>` : '');
+  byId('bookings').innerHTML = bookings.length === 0
+    ? '<div class="empty-state"><strong>No bookings yet</strong>Your tickets will appear here as boarding passes.<br><button onclick="showMainTab(\'book\')">Book a flight</button></div>'
+    : bookings.map(b => {
+        const confirmed = b.BookingStatus === 'Confirmed';
+        const status = confirmed && b.FlightStatus === 'Cancelled' ? 'Flight cancelled' : b.BookingStatus;
+        return `<div class="pass ${confirmed ? '' : 'inactive'}"><div class="pass-main">
+          <div class="pass-top"><span class="chip">${esc(b.FlightNumber)}</span><span class="badge pill ${cls(status)}">${esc(status)}</span></div>
+          <div class="pass-route"><span>${esc(b.OriginCode)}</span><span class="pass-arrow">&rarr;</span><span>${esc(b.DestinationCode)}</span></div>
+          <div class="pass-meta">
+            <div><small>Date</small><b>${esc(dayText(b.DepartureTime))}</b></div>
+            <div><small>Departs</small><b>${esc(timeText(b.DepartureTime))}</b></div>
+            <div><small>Arrives</small><b>${esc(timeText(b.ArrivalTime))}</b></div>
+            <div><small>Seat(s)</small><b>${esc(b.SeatNumber)}</b></div>
+            <div><small>Payment</small><b>${esc(b.PaymentMethod ?? '-')}</b></div>
+          </div>${noticeFor(b)}</div>
+          <div class="pass-stub"><small>Booking</small><strong>#${b.BookingID}</strong><small>Total</small><strong class="price">PKR ${Number(b.Price).toLocaleString('en-US')}</strong>
+            ${b.RefundAmount ? `<small>Refunded PKR ${Number(b.RefundAmount).toLocaleString('en-US')}</small>` : ''}
+            ${confirmed ? `<button class="danger" onclick="cancelBooking(${b.BookingID}, ${b.ExpectedRefund ?? 0})">Cancel booking</button>` : ''}</div></div>`;
       }).join('');
 });
 const cancelBooking = (bookingId, expectedRefund) => run(async () => {
@@ -691,6 +913,7 @@ function showMainTab(name) {
   if (name === 'baggage') loadBaggage();
   if (name === 'feedback') loadFeedback();
   if (name === 'admin') loadAdmin();
+  updateStepper();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 function togglePassword() {
@@ -703,6 +926,7 @@ function togglePassword() {
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const cls = text => String(text ?? '').replace(/[^A-Za-z]/g, '');
 function applyRole(admin) {
+  document.body.classList.toggle('is-admin', admin);
   ['book', 'bookings', 'baggage', 'feedback'].forEach(t => byId('navtab-' + t).classList.toggle('hidden', admin));
   byId('navtab-admin').classList.toggle('hidden', !admin);
 }
@@ -716,12 +940,13 @@ async function bookingOptions(selectId, confirmedOnly, emptyLabel) {
 let claimBagId = null;
 const loadBaggage = () => run(async () => {
   const bags = await api('/baggage/mine');
-  byId('bagList').innerHTML = bags.length === 0 ? '<tr><td>No bags yet. Add baggage to a booking above.</td></tr>'
-    : '<tr><th>Tag</th><th>Flight</th><th>Route</th><th>Weight</th><th>Fee</th><th>Bag status</th><th>Claim</th><th></th></tr>' +
-      bags.map(b => `<tr><td><strong>${esc(b.TagNumber)}</strong></td><td>${esc(b.FlightNumber)}</td><td>${esc(b.OriginCode)} to ${esc(b.DestinationCode)}</td>
-        <td>${b.WeightKg} kg</td><td>${b.Fee}</td><td><span class="badge ${cls(b.BagStatus)}">${esc(b.BagStatus)}</span></td>
-        <td>${b.ClaimReference ? esc(b.ClaimReference) + ' (' + esc(b.ClaimStatus) + ')' : '-'}</td>
-        <td><button class="secondary" onclick="openClaim(${b.BagID}, '${esc(b.TagNumber)}')">Report problem</button></td></tr>`).join('');
+  byId('bagList').innerHTML = bags.length === 0
+    ? '<div class="empty-state" style="grid-column:1/-1"><strong>No bags yet</strong>Choose your baggage weight while booking a flight and your bag tags will appear here.</div>'
+    : bags.map(b => `<div class="bag-tag"><div class="bt-top"><span class="bt-no">${esc(b.TagNumber)}</span><span class="badge pill ${cls(b.BagStatus)}">${esc(b.BagStatus)}</span></div>
+        <div class="bt-route">${esc(b.OriginCode)} <span>&rarr;</span> ${esc(b.DestinationCode)}</div>
+        <div class="bt-meta"><div><small>Flight</small><b>${esc(b.FlightNumber)}</b></div><div><small>Weight</small><b>${b.WeightKg} kg</b></div><div><small>Fee</small><b>PKR ${Number(b.Fee ?? 0).toLocaleString('en-US')}</b></div></div>
+        ${b.ClaimReference ? `<div class="bt-claim">Claim ${esc(b.ClaimReference)} - ${esc(b.ClaimStatus)}</div>` : ''}
+        <button class="secondary" onclick="openClaim(${b.BagID}, '${esc(b.TagNumber)}')">Report problem</button></div>`).join('');
   const claims = await api('/claims/mine');
   byId('claimList').innerHTML = claims.length === 0 ? '<p class="note">No claims. If a bag is lost, delayed or damaged, use Report problem above.</p>'
     : claims.map(c => `<div class="claimbox"><div class="head"><span><strong>${esc(c.ClaimReference)}</strong> - ${esc(c.ClaimType)} bag ${esc(c.TagNumber)} (${esc(c.FlightNumber)})</span>
@@ -744,17 +969,20 @@ const submitClaim = () => run(async () => {
   loadBaggage();
 });
 let feedbackRating = 0;
+const ratingWords = ['Tap a star to rate', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 function drawStars() {
-  byId('stars').innerHTML = [1, 2, 3, 4, 5].map(n => `<button type="button" class="${n <= feedbackRating ? 'on' : ''}" onclick="setRating(${n})" title="${n} star${n > 1 ? 's' : ''}">&#9733;</button>`).join('');
+  byId('stars').innerHTML = [1, 2, 3, 4, 5].map(n => `<button type="button" class="${n <= feedbackRating ? 'on' : ''}" onclick="setRating(${n})" title="${n} star${n > 1 ? 's' : ''}">&#9733;</button>`).join('') +
+    `<span class="star-label">${ratingWords[feedbackRating]}</span>`;
 }
 function setRating(n) { feedbackRating = n; drawStars(); }
 const loadFeedback = () => run(async () => {
   drawStars();
   await bookingOptions('fbBooking', false, 'General (no booking)');
   const items = await api('/feedback/mine');
-  byId('fbList').innerHTML = items.length === 0 ? '<tr><td>No feedback sent yet.</td></tr>'
-    : '<tr><th>Date</th><th>Rating</th><th>Category</th><th>Comment</th></tr>' +
-      items.map(f => `<tr><td>${showTime(f.CreatedAt).slice(0, 16)}</td><td class="rating">${'&#9733;'.repeat(f.Rating)}</td><td>${esc(f.Category)}</td><td>${esc(f.Comment)}</td></tr>`).join('');
+  byId('fbList').innerHTML = items.length === 0
+    ? '<div class="empty-state"><strong>No feedback sent yet</strong>Rate your experience above and it will show up here.</div>'
+    : items.map(f => `<div class="fb-card"><div class="fb-top"><span class="stars-gold">${'&#9733;'.repeat(f.Rating)}<span style="color:#cbd5e1">${'&#9733;'.repeat(5 - f.Rating)}</span></span>
+        <span class="chip ${cls(f.Category)}">${esc(f.Category)}</span><small>${esc(showTime(f.CreatedAt).slice(0, 16))}</small></div><p>${esc(f.Comment)}</p></div>`).join('');
 });
 function updateFbCount() {
   const length = byId('fbComment').value.trim().length;
@@ -791,20 +1019,59 @@ let adminFlightList = [];
 let reallocFromId = null;
 const pad2 = number => String(number).padStart(2, '0');
 const toLocalIso = date => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+const jumpTo = id => byId(id).scrollIntoView({behavior: 'smooth', block: 'start'});
+const countUp = (element, target, decimals = 0) => {
+  const steps = 24;
+  let step = 0;
+  const timer = setInterval(() => {
+    step++;
+    element.textContent = (target * Math.min(step / steps, 1)).toFixed(decimals);
+    if (step >= steps) clearInterval(timer);
+  }, 25);
+};
+const dayText = text => new Date(text).toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short'});
+const timeText = text => showTime(text).slice(11, 16);
 const loadAdminFlights = async () => {
   adminFlightList = await api('/admin/flights');
-  byId('adminFlights').innerHTML = '<table><tr><th>Flight</th><th>Route</th><th>Departs</th><th>Arrives</th><th>Status</th><th>Passengers</th><th>Actions</th></tr>' +
+  byId('adminFlights').innerHTML = '<table class="flight-table"><tr><th>Flight</th><th>Route</th><th>Departure</th><th>Seats filled</th><th>Status</th><th>Actions</th></tr>' +
     adminFlightList.map(f => {
       const needsMoving = f.Status === 'Cancelled' && f.ConfirmedBookings > 0;
-      return `<tr><td><strong>${esc(f.FlightNumber)}</strong></td><td>${esc(f.OriginCode)} to ${esc(f.DestinationCode)}</td>
-        <td>${esc(showTime(f.DepartureTime).slice(0, 16))}</td><td>${esc(showTime(f.ArrivalTime).slice(0, 16))}</td>
-        <td><span class="badge ${cls(f.Status)}">${esc(f.Status)}</span></td>
-        <td>${f.Passengers} (${f.ConfirmedBookings} bookings)</td>
-        <td><div class="admin-row" style="margin-top:0">
-          ${f.Status === 'Scheduled' ? `<button class="danger" onclick="adminCancelFlight(${f.FlightID})">Cancel flight</button><button class="secondary" onclick="adminRescheduleFlight(${f.FlightID})">Reschedule</button>` : ''}
-          ${f.Status !== 'Departed' && f.ConfirmedBookings > 0 ? `<button onclick="openRealloc(${f.FlightID})">${needsMoving ? 'Move ' + f.ConfirmedBookings + ' booking(s)' : 'Move passengers'}</button>` : ''}
-        </div></td></tr>`;
+      const percent = f.Capacity > 0 ? Math.round(100 * f.Passengers / f.Capacity) : 0;
+      const barClass = percent >= 85 ? 'high' : percent >= 60 ? 'mid' : '';
+      return `<tr class="${f.Status === 'Cancelled' ? 'row-cancelled' : ''}"><td><span class="flight-no">${esc(f.FlightNumber)}</span></td>
+        <td><div class="route">${esc(f.OriginCode)} <span class="arrow">&rarr;</span> ${esc(f.DestinationCode)}</div></td>
+        <td class="when"><strong>${esc(dayText(f.DepartureTime))}</strong><span>${esc(timeText(f.DepartureTime))} - ${esc(timeText(f.ArrivalTime))}</span></td>
+        <td class="occ"><div class="bar"><span class="${barClass}" style="width:${percent}%"></span></div><small>${f.Passengers} / ${f.Capacity} seats (${f.ConfirmedBookings} bookings)</small></td>
+        <td><span class="badge pill ${cls(f.Status)}">${esc(f.Status)}</span></td>
+        <td>
+          ${f.Status === 'Scheduled' ? `<button class="btn-sm ghost" onclick="adminRescheduleFlight(${f.FlightID})">Reschedule</button><button class="btn-sm danger" onclick="adminCancelFlight(${f.FlightID})">Cancel</button>` : ''}
+          ${f.Status !== 'Departed' && f.ConfirmedBookings > 0 ? `<button class="btn-sm ${needsMoving ? 'go' : 'ghost'}" onclick="openRealloc(${f.FlightID})">${needsMoving ? 'Move ' + f.ConfirmedBookings + ' booking(s)' : 'Move passengers'}</button>` : ''}
+        </td></tr>`;
     }).join('');
+};
+const renderAdminStats = (claims, feedbackItems) => {
+  const scheduled = adminFlightList.filter(f => f.Status === 'Scheduled');
+  const seatsBooked = scheduled.reduce((sum, f) => sum + f.Passengers, 0);
+  const seatsTotal = scheduled.reduce((sum, f) => sum + f.Capacity, 0);
+  const needMoving = adminFlightList.filter(f => f.Status === 'Cancelled').reduce((sum, f) => sum + f.ConfirmedBookings, 0);
+  const openClaims = claims.filter(c => c.Status !== 'Delivered' && c.Status !== 'Compensation Approved').length;
+  const average = feedbackItems.length ? feedbackItems.reduce((sum, f) => sum + f.Rating, 0) / feedbackItems.length : 0;
+  const cards = [
+    {cls: '', value: scheduled.length, label: 'Active flights', sub: `of ${adminFlightList.length} flights in total`},
+    {cls: 'blue', value: seatsBooked, label: 'Passengers booked', sub: seatsTotal ? `${Math.round(100 * seatsBooked / seatsTotal)}% of seats filled` : 'no seats yet'},
+    {cls: needMoving > 0 ? 'warn' : 'good', value: needMoving, label: 'Need moving', sub: needMoving > 0 ? 'bookings on cancelled flights' : 'everyone is on a flight'},
+    {cls: openClaims > 0 ? 'gold' : 'good', value: openClaims, label: 'Open claims', sub: `${claims.length} claim(s) in total`},
+    {cls: 'gold', value: average, decimals: 1, label: 'Average rating', sub: `${feedbackItems.length} review(s)`}
+  ];
+  byId('adminStats').innerHTML = cards.map((c, i) => `<div class="stat ${c.cls}"><div><div class="num" id="stat-${i}">0</div><div class="lbl">${c.label}</div><div class="sub">${c.sub}</div></div></div>`).join('');
+  cards.forEach((c, i) => countUp(byId('stat-' + i), c.value, c.decimals || 0));
+  byId('adminAlerts').innerHTML = adminFlightList.filter(f => f.Status === 'Cancelled' && f.ConfirmedBookings > 0).map(f =>
+    `<div class="alert-strip"><div class="msg"><strong>Flight ${esc(f.FlightNumber)} (${esc(f.OriginCode)} to ${esc(f.DestinationCode)}) is cancelled.</strong><br>${f.ConfirmedBookings} booking(s) with ${f.Passengers} passenger(s) still need a new flight.</div>
+      <button class="btn-sm go" onclick="openRealloc(${f.FlightID})">Move them now</button></div>`).join('');
+  byId('claimCount').textContent = claims.length;
+  byId('feedbackCount').textContent = feedbackItems.length;
+  byId('adminGreeting').textContent = 'Welcome back, ' + (byId('who').textContent || 'Admin');
+  byId('adminDate').textContent = new Date().toLocaleDateString('en-GB', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}) + ' - here is what needs your attention today.';
 };
 const loadAdminHistory = async () => {
   const moves = await api('/admin/reallocations');
@@ -887,7 +1154,8 @@ const loadAdmin = () => run(async () => {
   const items = await api('/admin/feedback');
   byId('adminFeedback').innerHTML = items.length === 0 ? '<tr><td>No feedback yet.</td></tr>'
     : '<tr><th>Date</th><th>Passenger</th><th>Rating</th><th>Category</th><th>Comment</th></tr>' +
-      items.map(f => `<tr><td>${showTime(f.CreatedAt).slice(0, 16)}</td><td>${esc(f.FullName)}</td><td class="rating">${'&#9733;'.repeat(f.Rating)}</td><td>${esc(f.Category)}</td><td>${esc(f.Comment)}</td></tr>`).join('');
+      items.map(f => `<tr><td>${showTime(f.CreatedAt).slice(0, 16)}</td><td>${esc(f.FullName)}</td><td class="stars-gold">${'&#9733;'.repeat(f.Rating)}<span style="color:#cbd5e1">${'&#9733;'.repeat(5 - f.Rating)}</span></td><td><span class="chip ${cls(f.Category)}">${esc(f.Category)}</span></td><td>${esc(f.Comment)}</td></tr>`).join('');
+  renderAdminStats(claims, items);
 });
 const updateClaim = id => run(async () => {
   await api(`/admin/claims/${id}/status`, 'POST', {status: byId('st-' + id).value, note: byId('nt-' + id).value, amount: byId('am-' + id).value || '0'});
@@ -896,6 +1164,14 @@ const updateClaim = id => run(async () => {
 });
 try { localStorage.removeItem('theme'); } catch (error) {}
 byId('travelDate').valueAsDate = new Date(Date.now() + 8 * 86400000);
+byId('travelDate').min = new Date().toISOString().slice(0, 10);
+const updateCardPreview = () => {
+  const digits = byId('cardNumber').value.replace(/\D/g, '');
+  byId('cpNumber').textContent = (digits + '\u2022'.repeat(16)).slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+  byId('cpName').textContent = byId('payerName').value.trim().toUpperCase() || 'YOUR NAME';
+  byId('cpExpiry').textContent = byId('cardExpiry').value || 'MM/YY';
+};
+['cardNumber', 'cardExpiry', 'payerName'].forEach(id => byId(id).addEventListener('input', updateCardPreview));
 api('/me').then(showUser).catch(() => showUser(null));
 </script>
 </body>

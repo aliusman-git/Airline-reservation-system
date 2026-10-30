@@ -113,7 +113,7 @@ CREATE TABLE Bookings (
     CONSTRAINT UQ_Bookings_Booking_Flight UNIQUE (BookingID, FlightID),
     CONSTRAINT FK_Bookings_Passenger FOREIGN KEY (PassengerID) REFERENCES Passengers(PassengerID),
     CONSTRAINT FK_Bookings_Flight FOREIGN KEY (FlightID) REFERENCES Flights(FlightID),
-    CONSTRAINT CK_Bookings_Status CHECK (Status IN ('Confirmed', 'Cancelled'))
+    CONSTRAINT CK_Bookings_Status CHECK (Status IN ('Confirmed', 'Cancelled', 'Rebooked'))
 );
 GO
 CREATE UNIQUE INDEX UX_Bookings_Passenger_Flight_Active ON Bookings (PassengerID, FlightID) WHERE Status = 'Confirmed';
@@ -229,6 +229,28 @@ BEGIN
     );
 END
 GO
+GO
+
+/* ---- Round 3 table: flight re-allocation log ---- */
+CREATE TABLE Reallocations (
+    ReallocationID INT IDENTITY(1,1) NOT NULL,
+    OldBookingID   INT NOT NULL,
+    NewBookingID   INT NOT NULL,
+    OldFlightID    INT NOT NULL,
+    NewFlightID    INT NOT NULL,
+    OldSeats       VARCHAR(200) NOT NULL,
+    NewSeats       VARCHAR(200) NOT NULL,
+    Reason         VARCHAR(200) NOT NULL,
+    MovedBy        VARCHAR(100) NOT NULL,
+    MovedAt        DATETIME2(0) NOT NULL CONSTRAINT DF_Realloc_MovedAt DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_Reallocations PRIMARY KEY (ReallocationID),
+    CONSTRAINT UQ_Realloc_OldBooking UNIQUE (OldBookingID),
+    CONSTRAINT FK_Realloc_OldBooking FOREIGN KEY (OldBookingID) REFERENCES Bookings(BookingID),
+    CONSTRAINT FK_Realloc_NewBooking FOREIGN KEY (NewBookingID) REFERENCES Bookings(BookingID),
+    CONSTRAINT FK_Realloc_OldFlight FOREIGN KEY (OldFlightID) REFERENCES Flights(FlightID),
+    CONSTRAINT FK_Realloc_NewFlight FOREIGN KEY (NewFlightID) REFERENCES Flights(FlightID)
+);
+CREATE INDEX IX_Realloc_NewBooking ON Reallocations (NewBookingID);
 GO
 
 /* ---------------- PART 2 - Stored procedures ---------------- */
@@ -480,7 +502,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-    DECLARE @OwnerID INT, @BookingStatus VARCHAR(20), @FlightID INT, @DepartureTime DATETIME2(0);
+    DECLARE @OwnerID INT, @BookingStatus VARCHAR(20), @FlightID INT, @DepartureTime DATETIME2(0), @FlightStatus VARCHAR(20);
     DECLARE @Price DECIMAL(10,2), @Refund DECIMAL(10,2), @RefundMethod VARCHAR(20);
     BEGIN TRY
         BEGIN TRANSACTION;
@@ -490,12 +512,15 @@ BEGIN
             THROW 50050, 'Booking not found.', 1;
         IF @BookingStatus = 'Cancelled'
             THROW 50051, 'This booking is already cancelled.', 1;
-        SELECT @DepartureTime = DepartureTime FROM Flights WHERE FlightID = @FlightID;
-        IF @DepartureTime <= SYSDATETIME()
+        IF @BookingStatus = 'Rebooked'
+            THROW 50053, 'This booking was moved to another flight. Cancel the new booking instead.', 1;
+        SELECT @DepartureTime = DepartureTime, @FlightStatus = Status FROM Flights WHERE FlightID = @FlightID;
+        IF @DepartureTime <= SYSDATETIME() AND @FlightStatus <> 'Cancelled'
             THROW 50052, 'A flight that has already departed cannot be cancelled.', 1;
         SELECT @Price = SUM(Price) FROM Tickets WHERE BookingID = @BookingID AND Status = 'Active';
         SET @Refund = CAST(
-            CASE WHEN @DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN @Price
+            CASE WHEN @FlightStatus = 'Cancelled' THEN @Price
+                 WHEN @DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN @Price
                  WHEN @DepartureTime > DATEADD(HOUR, 24, SYSDATETIME()) THEN @Price * 0.50
                  ELSE 0 END AS DECIMAL(10,2));
         UPDATE Bookings SET Status = 'Cancelled', CancelledAt = SYSDATETIME() WHERE BookingID = @BookingID;
@@ -530,9 +555,13 @@ BEGIN
            f.DepartureTime, f.ArrivalTime, tk.SeatNumbers AS SeatNumber, tk.TotalPrice AS Price, tk.TotalRefund AS RefundAmount,
            pay.Method AS PaymentMethod, pay.Reference AS PaymentReference,
            CASE WHEN b.Status = 'Confirmed' THEN CAST(
-               CASE WHEN f.DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN tk.TotalPrice
+               CASE WHEN f.Status = 'Cancelled' THEN tk.TotalPrice
+                    WHEN f.DepartureTime > DATEADD(HOUR, 48, SYSDATETIME()) THEN tk.TotalPrice
                     WHEN f.DepartureTime > DATEADD(HOUR, 24, SYSDATETIME()) THEN tk.TotalPrice * 0.50
-                    ELSE 0 END AS DECIMAL(10,2)) END AS ExpectedRefund
+                    ELSE 0 END AS DECIMAL(10,2)) END AS ExpectedRefund,
+           f.Status AS FlightStatus,
+           mv.MovedFromFlight, mv.MovedFromSeats, mv.MoveReason, mv.MovedAt,
+           mt.MovedToBooking
     FROM Bookings b
     JOIN Flights f ON f.FlightID = b.FlightID
     CROSS APPLY (SELECT STRING_AGG(t.SeatNumber, ', ') WITHIN GROUP (ORDER BY t.SeatNumber) AS SeatNumbers,
@@ -540,6 +569,12 @@ BEGIN
                  FROM Tickets t WHERE t.BookingID = b.BookingID) tk
     OUTER APPLY (SELECT TOP 1 Method, Reference FROM Payments
                  WHERE BookingID = b.BookingID AND Status = 'Paid' ORDER BY PaymentID) pay
+    OUTER APPLY (SELECT TOP 1 fo.FlightNumber AS MovedFromFlight, r.OldSeats AS MovedFromSeats,
+                        r.Reason AS MoveReason, r.MovedAt
+                 FROM Reallocations r JOIN Flights fo ON fo.FlightID = r.OldFlightID
+                 WHERE r.NewBookingID = b.BookingID ORDER BY r.ReallocationID DESC) mv
+    OUTER APPLY (SELECT TOP 1 r2.NewBookingID AS MovedToBooking
+                 FROM Reallocations r2 WHERE r2.OldBookingID = b.BookingID) mt
     WHERE b.PassengerID = @PassengerID
     ORDER BY f.DepartureTime DESC;
 END;
@@ -821,6 +856,248 @@ BEGIN
 END;
 GO
 
+/* ---- Round 3 procedures: flight management and passenger re-allocation (admin) ---- */
+-- Admin: every flight with how many passengers hold confirmed seats on it.
+CREATE OR ALTER PROCEDURE usp_AdminGetFlights
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT f.FlightID, f.FlightNumber, f.OriginCode, f.DestinationCode, f.DepartureTime, f.ArrivalTime, f.Status, f.Capacity,
+           ISNULL(x.Passengers, 0) AS Passengers, ISNULL(x.ConfirmedBookings, 0) AS ConfirmedBookings
+    FROM Flights f
+    OUTER APPLY (SELECT COUNT(*) AS Passengers, COUNT(DISTINCT t.BookingID) AS ConfirmedBookings
+                 FROM Tickets t JOIN Bookings b ON b.BookingID = t.BookingID
+                 WHERE t.FlightID = f.FlightID AND t.Status = 'Active' AND b.Status = 'Confirmed') x
+    ORDER BY f.DepartureTime;
+END;
+GO
+-- Admin: cancel a flight. Its passengers keep their bookings until the admin moves them (or they cancel for a full refund).
+CREATE OR ALTER PROCEDURE usp_AdminCancelFlight
+    @FlightID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @FlightStatus VARCHAR(20), @AffectedBookings INT;
+    SELECT @FlightStatus = Status FROM Flights WHERE FlightID = @FlightID;
+    IF @FlightStatus IS NULL
+        THROW 50100, 'Flight does not exist.', 1;
+    IF @FlightStatus <> 'Scheduled'
+        THROW 50109, 'Only a scheduled flight can be cancelled.', 1;
+    UPDATE Flights SET Status = 'Cancelled' WHERE FlightID = @FlightID;
+    SELECT @AffectedBookings = COUNT(*) FROM Bookings WHERE FlightID = @FlightID AND Status = 'Confirmed';
+    SELECT @FlightID AS FlightID, 'Cancelled' AS Status, @AffectedBookings AS AffectedBookings;
+END;
+GO
+-- Admin: change the departure and arrival time of a scheduled flight (a delay or an earlier departure).
+CREATE OR ALTER PROCEDURE usp_AdminRescheduleFlight
+    @FlightID INT, @NewDeparture DATETIME2(0), @NewArrival DATETIME2(0)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @FlightStatus VARCHAR(20);
+    SELECT @FlightStatus = Status FROM Flights WHERE FlightID = @FlightID;
+    IF @FlightStatus IS NULL
+        THROW 50100, 'Flight does not exist.', 1;
+    IF @FlightStatus <> 'Scheduled'
+        THROW 50110, 'Only a scheduled flight can be rescheduled.', 1;
+    IF @NewDeparture <= SYSDATETIME()
+        THROW 50111, 'The new departure time must be in the future.', 1;
+    IF @NewArrival <= @NewDeparture
+        THROW 50112, 'The arrival time must be after the departure time.', 1;
+    UPDATE Flights SET DepartureTime = @NewDeparture, ArrivalTime = @NewArrival WHERE FlightID = @FlightID;
+    SELECT @FlightID AS FlightID, @NewDeparture AS DepartureTime, @NewArrival AS ArrivalTime;
+END;
+GO
+-- Admin: confirmed bookings on one flight (the passengers who may need to be moved).
+CREATE OR ALTER PROCEDURE usp_AdminGetFlightBookings
+    @FlightID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT b.BookingID, p.FullName, p.Email, tk.Seats, tk.TicketCount, ISNULL(bg.TotalKg, 0) AS BaggageKg
+    FROM Bookings b
+    JOIN Passengers p ON p.PassengerID = b.PassengerID
+    CROSS APPLY (SELECT STRING_AGG(t.SeatNumber, ', ') WITHIN GROUP (ORDER BY t.SeatNumber) AS Seats, COUNT(*) AS TicketCount
+                 FROM Tickets t WHERE t.BookingID = b.BookingID AND t.Status = 'Active') tk
+    OUTER APPLY (SELECT SUM(WeightKg) AS TotalKg FROM Baggage WHERE BookingID = b.BookingID) bg
+    WHERE b.FlightID = @FlightID AND b.Status = 'Confirmed'
+    ORDER BY b.BookingID;
+END;
+GO
+-- Admin: flights a passenger group can be moved to (same route, scheduled, in the future) with free seats per class.
+CREATE OR ALTER PROCEDURE usp_AdminGetTargetFlights
+    @FromFlightID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT f.FlightID, f.FlightNumber, f.OriginCode, f.DestinationCode, f.DepartureTime, f.ArrivalTime,
+           ISNULL(fr.FreeEconomy, 0) AS FreeEconomy, ISNULL(fr.FreeBusiness, 0) AS FreeBusiness
+    FROM Flights f
+    JOIN Flights o ON o.FlightID = @FromFlightID AND o.OriginCode = f.OriginCode AND o.DestinationCode = f.DestinationCode
+    CROSS APPLY (SELECT SUM(CASE WHEN s.SeatClass = 'Economy' THEN 1 ELSE 0 END) AS FreeEconomy,
+                        SUM(CASE WHEN s.SeatClass = 'Business' THEN 1 ELSE 0 END) AS FreeBusiness
+                 FROM Seats s
+                 WHERE s.FlightID = f.FlightID
+                   AND NOT EXISTS (SELECT 1 FROM Tickets t WHERE t.FlightID = s.FlightID AND t.SeatNumber = s.SeatNumber AND t.Status = 'Active')) fr
+    WHERE f.FlightID <> @FromFlightID AND f.Status = 'Scheduled' AND f.DepartureTime > SYSDATETIME()
+    ORDER BY f.DepartureTime;
+END;
+GO
+-- Admin: move confirmed bookings from one flight to another flight on the same route, all or nothing.
+-- @BookingIDs = comma separated booking numbers, or empty to move every confirmed booking on the old flight.
+-- Each passenger keeps the same seat class and the price already paid. Neighbouring seats are kept together when possible.
+-- The old booking becomes 'Rebooked', a new booking is created, and the payment and baggage move with it.
+CREATE OR ALTER PROCEDURE usp_AdminReallocate
+    @FromFlightID INT, @ToFlightID INT, @BookingIDs VARCHAR(MAX) = '', @Reason VARCHAR(200) = '', @AdminEmail VARCHAR(100) = ''
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @FromOrigin CHAR(3), @FromDestination CHAR(3), @FromStatus VARCHAR(20);
+    DECLARE @ToOrigin CHAR(3), @ToDestination CHAR(3), @ToStatus VARCHAR(20), @ToDeparture DATETIME2(0), @ToNumber VARCHAR(20);
+    DECLARE @CurrentBookingID INT, @PassengerID INT, @NewBookingID INT, @MovedBookings INT = 0, @MovedSeats INT = 0;
+    DECLARE @SeatClass VARCHAR(20), @NeedCount INT, @StartRow INT, @StartLetter INT, @OldSeatText VARCHAR(200), @NewSeatText VARCHAR(200);
+    DECLARE @ShortClass VARCHAR(20), @ShortNeed INT, @ShortFree INT, @ShortMessage NVARCHAR(200);
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        SET @Reason = LEFT(LTRIM(RTRIM(ISNULL(@Reason, ''))), 200);
+        IF @Reason = '' SET @Reason = 'Flight change by the airline';
+        SET @AdminEmail = LEFT(LTRIM(RTRIM(ISNULL(@AdminEmail, ''))), 100);
+        IF @AdminEmail = '' SET @AdminEmail = 'admin';
+        SELECT @FromOrigin = OriginCode, @FromDestination = DestinationCode, @FromStatus = Status
+        FROM Flights WITH (UPDLOCK) WHERE FlightID = @FromFlightID;
+        SELECT @ToOrigin = OriginCode, @ToDestination = DestinationCode, @ToStatus = Status, @ToDeparture = DepartureTime, @ToNumber = FlightNumber
+        FROM Flights WITH (UPDLOCK) WHERE FlightID = @ToFlightID;
+        IF @FromStatus IS NULL
+            THROW 50100, 'The old flight does not exist.', 1;
+        IF @ToStatus IS NULL
+            THROW 50101, 'The new flight does not exist.', 1;
+        IF @FromFlightID = @ToFlightID
+            THROW 50102, 'Choose a different flight to move the passengers to.', 1;
+        IF @FromOrigin <> @ToOrigin OR @FromDestination <> @ToDestination
+            THROW 50103, 'The new flight must fly the same route as the old flight.', 1;
+        IF @ToStatus <> 'Scheduled' OR @ToDeparture <= SYSDATETIME()
+            THROW 50104, 'The new flight must be scheduled and in the future.', 1;
+        IF @FromStatus = 'Departed'
+            THROW 50105, 'Passengers cannot be moved from a flight that already departed.', 1;
+        CREATE TABLE #Moving (BookingID INT NOT NULL PRIMARY KEY, PassengerID INT NOT NULL);
+        INSERT INTO #Moving (BookingID, PassengerID)
+        SELECT b.BookingID, b.PassengerID
+        FROM Bookings b
+        WHERE b.FlightID = @FromFlightID AND b.Status = 'Confirmed'
+          AND (LTRIM(RTRIM(ISNULL(@BookingIDs, ''))) = ''
+               OR b.BookingID IN (SELECT TRY_CAST(value AS INT) FROM STRING_SPLIT(@BookingIDs, ',')));
+        IF NOT EXISTS (SELECT 1 FROM #Moving)
+            THROW 50106, 'There are no confirmed bookings to move.', 1;
+        IF EXISTS (SELECT 1 FROM #Moving m
+                   JOIN Bookings nb ON nb.PassengerID = m.PassengerID AND nb.FlightID = @ToFlightID AND nb.Status = 'Confirmed')
+            THROW 50107, 'Some of these passengers already have a confirmed booking on the new flight.', 1;
+        CREATE TABLE #Free (SeatNumber VARCHAR(10) NOT NULL PRIMARY KEY, SeatClass VARCHAR(20) NOT NULL, RowNo INT NOT NULL, Letter INT NOT NULL);
+        INSERT INTO #Free (SeatNumber, SeatClass, RowNo, Letter)
+        SELECT s.SeatNumber, s.SeatClass, CAST(LEFT(s.SeatNumber, LEN(s.SeatNumber) - 1) AS INT), ASCII(RIGHT(s.SeatNumber, 1))
+        FROM Seats s
+        WHERE s.FlightID = @ToFlightID
+          AND NOT EXISTS (SELECT 1 FROM Tickets t WHERE t.FlightID = s.FlightID AND t.SeatNumber = s.SeatNumber AND t.Status = 'Active');
+        CREATE TABLE #Need (SeatClass VARCHAR(20) NOT NULL PRIMARY KEY, Needed INT NOT NULL);
+        INSERT INTO #Need (SeatClass, Needed)
+        SELECT s.SeatClass, COUNT(*)
+        FROM Tickets t
+        JOIN Seats s ON s.FlightID = t.FlightID AND s.SeatNumber = t.SeatNumber
+        WHERE t.FlightID = @FromFlightID AND t.Status = 'Active' AND t.BookingID IN (SELECT BookingID FROM #Moving)
+        GROUP BY s.SeatClass;
+        SELECT TOP 1 @ShortClass = n.SeatClass, @ShortNeed = n.Needed,
+               @ShortFree = (SELECT COUNT(*) FROM #Free f WHERE f.SeatClass = n.SeatClass)
+        FROM #Need n
+        WHERE n.Needed > (SELECT COUNT(*) FROM #Free f WHERE f.SeatClass = n.SeatClass);
+        IF @ShortClass IS NOT NULL
+        BEGIN
+            SET @ShortMessage = CONCAT('Not enough free ', @ShortClass, ' seats on ', @ToNumber, ' (need ', @ShortNeed, ', free ', @ShortFree, '). Nothing was moved.');
+            THROW 50108, @ShortMessage, 1;
+        END;
+        CREATE TABLE #OldTickets (TicketID INT NOT NULL PRIMARY KEY, SeatNumber VARCHAR(10) NOT NULL, SeatClass VARCHAR(20) NOT NULL, Price DECIMAL(10,2) NOT NULL, Position INT NOT NULL);
+        CREATE TABLE #Pick (SeatNumber VARCHAR(10) NOT NULL PRIMARY KEY, RowNo INT NOT NULL, Letter INT NOT NULL);
+        SELECT @CurrentBookingID = MIN(BookingID) FROM #Moving;
+        WHILE @CurrentBookingID IS NOT NULL
+        BEGIN
+            SELECT @PassengerID = PassengerID FROM #Moving WHERE BookingID = @CurrentBookingID;
+            DELETE FROM #OldTickets;
+            INSERT INTO #OldTickets (TicketID, SeatNumber, SeatClass, Price, Position)
+            SELECT t.TicketID, t.SeatNumber, s.SeatClass, t.Price,
+                   ROW_NUMBER() OVER (PARTITION BY s.SeatClass
+                                      ORDER BY CAST(LEFT(t.SeatNumber, LEN(t.SeatNumber) - 1) AS INT), RIGHT(t.SeatNumber, 1))
+            FROM Tickets t
+            JOIN Seats s ON s.FlightID = t.FlightID AND s.SeatNumber = t.SeatNumber
+            WHERE t.BookingID = @CurrentBookingID AND t.Status = 'Active';
+            INSERT INTO Bookings (PassengerID, FlightID, Status) VALUES (@PassengerID, @ToFlightID, 'Confirmed');
+            SET @NewBookingID = SCOPE_IDENTITY();
+            SELECT @SeatClass = MIN(SeatClass) FROM #OldTickets;
+            WHILE @SeatClass IS NOT NULL
+            BEGIN
+                SELECT @NeedCount = COUNT(*) FROM #OldTickets WHERE SeatClass = @SeatClass;
+                DELETE FROM #Pick;
+                SET @StartRow = NULL;
+                SET @StartLetter = NULL;
+                -- Prefer a block of neighbouring seats in one row that does not cross the aisle (between C and D).
+                SELECT TOP 1 @StartRow = f.RowNo, @StartLetter = f.Letter
+                FROM #Free f
+                WHERE f.SeatClass = @SeatClass
+                  AND (SELECT COUNT(*) FROM #Free g
+                       WHERE g.SeatClass = @SeatClass AND g.RowNo = f.RowNo
+                         AND g.Letter BETWEEN f.Letter AND f.Letter + @NeedCount - 1) = @NeedCount
+                ORDER BY CASE WHEN f.Letter <= 67 AND f.Letter + @NeedCount - 1 > 67 THEN 1 ELSE 0 END, f.RowNo, f.Letter;
+                IF @StartRow IS NOT NULL
+                    INSERT INTO #Pick (SeatNumber, RowNo, Letter)
+                    SELECT g.SeatNumber, g.RowNo, g.Letter FROM #Free g
+                    WHERE g.SeatClass = @SeatClass AND g.RowNo = @StartRow AND g.Letter BETWEEN @StartLetter AND @StartLetter + @NeedCount - 1;
+                ELSE
+                    INSERT INTO #Pick (SeatNumber, RowNo, Letter)
+                    SELECT TOP (@NeedCount) g.SeatNumber, g.RowNo, g.Letter FROM #Free g
+                    WHERE g.SeatClass = @SeatClass ORDER BY g.RowNo, g.Letter;
+                INSERT INTO Tickets (BookingID, FlightID, SeatNumber, Price)
+                SELECT @NewBookingID, @ToFlightID, p.SeatNumber, o.Price
+                FROM (SELECT SeatNumber, ROW_NUMBER() OVER (ORDER BY RowNo, Letter) AS Position FROM #Pick) p
+                JOIN #OldTickets o ON o.SeatClass = @SeatClass AND o.Position = p.Position;
+                DELETE f FROM #Free f JOIN #Pick p ON p.SeatNumber = f.SeatNumber;
+                SELECT @SeatClass = MIN(SeatClass) FROM #OldTickets WHERE SeatClass > @SeatClass;
+            END;
+            SELECT @OldSeatText = LEFT(STRING_AGG(SeatNumber, ', ') WITHIN GROUP (ORDER BY SeatNumber), 200) FROM #OldTickets;
+            SELECT @NewSeatText = LEFT(STRING_AGG(SeatNumber, ', ') WITHIN GROUP (ORDER BY SeatNumber), 200)
+            FROM Tickets WHERE BookingID = @NewBookingID;
+            UPDATE Tickets SET Status = 'Cancelled' WHERE TicketID IN (SELECT TicketID FROM #OldTickets);
+            UPDATE Bookings SET Status = 'Rebooked' WHERE BookingID = @CurrentBookingID;
+            UPDATE Payments SET BookingID = @NewBookingID WHERE BookingID = @CurrentBookingID;
+            UPDATE Baggage SET BookingID = @NewBookingID WHERE BookingID = @CurrentBookingID;
+            INSERT INTO Reallocations (OldBookingID, NewBookingID, OldFlightID, NewFlightID, OldSeats, NewSeats, Reason, MovedBy)
+            VALUES (@CurrentBookingID, @NewBookingID, @FromFlightID, @ToFlightID, @OldSeatText, @NewSeatText, @Reason, @AdminEmail);
+            SET @MovedBookings = @MovedBookings + 1;
+            SELECT @MovedSeats = @MovedSeats + COUNT(*) FROM #OldTickets;
+            SELECT @CurrentBookingID = MIN(BookingID) FROM #Moving WHERE BookingID > @CurrentBookingID;
+        END;
+        COMMIT TRANSACTION;
+        SELECT @MovedBookings AS MovedBookings, @MovedSeats AS MovedSeats, @FromFlightID AS FromFlightID, @ToFlightID AS ToFlightID;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+-- Admin: history of every move (newest first).
+CREATE OR ALTER PROCEDURE usp_AdminGetReallocations
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT TOP 100 r.ReallocationID, r.MovedAt, p.FullName, p.Email, fo.FlightNumber AS OldFlight, fn.FlightNumber AS NewFlight,
+           fn.DepartureTime AS NewDeparture, r.OldSeats, r.NewSeats, r.Reason, r.MovedBy
+    FROM Reallocations r
+    JOIN Bookings b ON b.BookingID = r.NewBookingID
+    JOIN Passengers p ON p.PassengerID = b.PassengerID
+    JOIN Flights fo ON fo.FlightID = r.OldFlightID
+    JOIN Flights fn ON fn.FlightID = r.NewFlightID
+    ORDER BY r.ReallocationID DESC;
+END;
+GO
+
 /* ---------------- PART 3 - Sample data ---------------- */
 INSERT INTO Airports (AirportCode, City, Country) VALUES
     ('KHI', 'Karachi', 'Pakistan'), ('LHE', 'Lahore', 'Pakistan'), ('ISB', 'Islamabad', 'Pakistan'),
@@ -846,7 +1123,7 @@ FROM (VALUES
     ('PK-799', 'SKT', 'PEW', 6,  600,  65, 230, 14000.00),
     ('PK-739', 'SKT', 'MUX', 6, 1200,  80, 230, 12000.00)
 ) AS v (FlightNumber, OriginCode, DestinationCode, DayOffset, DepartMinutes, DurationMinutes, Capacity, BasePrice)
-CROSS JOIN (VALUES (7, '')) AS w (WeekShift, Suffix);
+CROSS JOIN (VALUES (7, ''), (8, 'B')) AS w (WeekShift, Suffix);
 GO
 DECLARE @CurrentFlightID INT = (SELECT MIN(FlightID) FROM Flights);
 WHILE @CurrentFlightID IS NOT NULL
@@ -897,5 +1174,10 @@ EXEC usp_BookFlight @PassengerID = 1, @FlightID = 1, @SeatNumber = '5C', @Paymen
 EXEC usp_GetPassengerBookings @PassengerID = 1;
 EXEC usp_CancelBooking @BookingID = 1, @PassengerID = 1;
 SELECT * FROM Payments;
+EXEC usp_AdminGetFlights;
+EXEC usp_AdminCancelFlight @FlightID = 1;
+EXEC usp_AdminGetTargetFlights @FromFlightID = 1;
+EXEC usp_AdminReallocate @FromFlightID = 1, @ToFlightID = 2, @BookingIDs = '', @Reason = 'Flight cancelled', @AdminEmail = 'admin@airline.com';
+EXEC usp_AdminGetReallocations;
 
    --------------------------------------------------------------------- */

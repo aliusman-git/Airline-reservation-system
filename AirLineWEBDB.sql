@@ -1,15 +1,4 @@
-/* =====================================================================
-   AirlineWEBDB - Airline Reservation System (SQL Server / T-SQL)
-
-   RUN THIS WHOLE FILE ONCE in SQL Server Management Studio (press F5).
-
-   WARNING: it DROPS and RECREATES the AirlineWEBDB database, so every
-   run starts clean. Remove PART 0 once you keep real data.
-
-   Parts: 0 Reset | 1 Tables | 2 Procedures | 3 Sample data | 4 App login | 5 Tests
-   ===================================================================== */
-
-/* ---------------- PART 0 - Reset database ---------------- */
+--PART 0 - Reset database 
 USE master;
 GO
 IF DB_ID('AirlineWEBDB') IS NOT NULL
@@ -26,7 +15,7 @@ SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
 
-/* ---------------- PART 1 - Tables ---------------- */
+-- PART 1 - Tables 
 CREATE TABLE Airports (
     AirportCode CHAR(3)      NOT NULL,
     City        VARCHAR(100) NOT NULL,
@@ -161,7 +150,7 @@ GO
 CREATE INDEX IX_Payments_Booking ON Payments (BookingID);
 GO
 
-/* ---- Round 2 tables: baggage, lost-baggage claims, feedback ---- */
+-- Round 2 tables: baggage, lost-baggage claims, feedback 
 IF OBJECT_ID('Baggage', 'U') IS NULL
 BEGIN
     CREATE TABLE Baggage (
@@ -232,7 +221,7 @@ END
 GO
 GO
 
-/* ---- Round 3 table: flight re-allocation log ---- */
+-- Round 3 table: flight re-allocation log 
 CREATE TABLE Reallocations (
     ReallocationID INT IDENTITY(1,1) NOT NULL,
     OldBookingID   INT NOT NULL,
@@ -254,7 +243,7 @@ CREATE TABLE Reallocations (
 CREATE INDEX IX_Realloc_NewBooking ON Reallocations (NewBookingID);
 GO
 
-/* ---------------- PART 2 - Stored procedures ---------------- */
+-- PART 2 - Stored procedures 
 
 -- Seat map: 6 seats per row (A-F), rows 1-3 Business at 2x price.
 CREATE OR ALTER PROCEDURE usp_GenerateSeats
@@ -715,7 +704,7 @@ BEGIN
 END;
 GO
 
-/* ---- Round 2 procedures: baggage, claims, feedback ---- */
+-- Round 2 procedures: baggage, claims, feedback 
 -- Baggage: 1 free bag per passenger, extra bags PKR 3,000 each, maximum 3 bags per passenger.
 CREATE OR ALTER PROCEDURE usp_AddBaggage
     @BookingID INT, @PassengerID INT, @WeightKg INT
@@ -797,7 +786,7 @@ BEGIN
            g.TagNumber, f.FlightNumber, p.FullName,
            (SELECT STRING_AGG(CONCAT(CONVERT(VARCHAR(16), u.CreatedAt, 120), ' - ', u.Status,
                    CASE WHEN u.Note <> '' THEN ': ' + u.Note ELSE '' END,
-                   CASE WHEN u.Amount IS NOT NULL THEN ' - Compensation approved: PKR ' + FORMAT(u.Amount, 'N0') ELSE '' END), '|') WITHIN GROUP (ORDER BY u.UpdateID)
+                   CASE WHEN u.Amount IS NOT NULL THEN ' - Compensation: PKR ' + FORMAT(u.Amount, 'N0') ELSE '' END), '|') WITHIN GROUP (ORDER BY u.UpdateID)
             FROM ClaimUpdates u WHERE u.ClaimID = c.ClaimID) AS Timeline
     FROM BaggageClaims c
     JOIN Baggage g ON g.BagID = c.BagID
@@ -820,10 +809,10 @@ BEGIN
     BEGIN TRANSACTION;
     UPDATE BaggageClaims
     SET Status = @Status,
-        CompensationAmount = CASE WHEN @Status = 'Compensation Approved' THEN @Amount ELSE CompensationAmount END
+        CompensationAmount = CASE WHEN @Amount > 0 THEN @Amount ELSE CompensationAmount END
     WHERE ClaimID = @ClaimID;
     INSERT INTO ClaimUpdates (ClaimID, Status, Note, Amount)
-    VALUES (@ClaimID, @Status, LEFT(LTRIM(RTRIM(ISNULL(@Note, ''))), 300), CASE WHEN @Status = 'Compensation Approved' THEN @Amount END);
+    VALUES (@ClaimID, @Status, LEFT(LTRIM(RTRIM(ISNULL(@Note, ''))), 300), CASE WHEN @Amount > 0 THEN @Amount END);
     UPDATE Baggage
     SET Status = CASE WHEN @Status = 'Found' THEN 'Arrived' WHEN @Status = 'Delivered' THEN 'Delivered' ELSE Status END
     WHERE BagID = (SELECT BagID FROM BaggageClaims WHERE ClaimID = @ClaimID);
@@ -859,7 +848,6 @@ BEGIN
 END;
 GO
 
-/* ---- Round 3 procedures: flight management and passenger re-allocation (admin) ---- */
 -- Admin: every flight with how many passengers hold confirmed seats on it.
 CREATE OR ALTER PROCEDURE usp_AdminGetFlights
 AS
@@ -1145,7 +1133,7 @@ GO
 EXEC usp_RegisterUser @FullName = 'Demo Passenger', @Email = 'demo@example.com', @Phone = '0300-0000000', @Password = N'Demo@12345';
 GO
 
-/* ---------------- PART 4 - Application login ----------------
+/*                             PART 4 - Application login 
    The Java app connects with a SQL login. The password is NOT stored in this file.
    A) FIRST TIME ONLY: remove the comment markers, choose your own password, run it once
       (SQL Server must allow "SQL Server and Windows Authentication mode"):
